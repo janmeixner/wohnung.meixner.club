@@ -76,7 +76,7 @@
 <body>
 <aside id="panel">
   <h1>Wohnung – 3D-Planer</h1>
-  <div class="sub">Küche/Esszimmer und Wohnzimmer, maßstabsgetreu</div>
+  <div class="sub">Küche/Esszimmer, Wohnzimmer, Büro und Schlafzimmer, maßstabsgetreu</div>
 
   <h2>Ansicht</h2>
   <div class="views" id="views">
@@ -84,6 +84,8 @@
     <button data-view="top">Draufsicht</button>
     <button data-view="wohn">Wohnzimmer</button>
     <button data-view="kueche">Küche &amp; Essen</button>
+    <button data-view="buero">Büro</button>
+    <button data-view="schlaf">Schlafzimmer</button>
   </div>
 
   <h2>Optionen</h2>
@@ -94,6 +96,8 @@
   <h2>Räume</h2>
   <div class="room"><b>Wohnzimmer</b><span>5,06 × 3,97 m · ca. 19,7 m²</span></div>
   <div class="room"><b>Küche &amp; Esszimmer</b><span>5,00 × 4,06 m · ca. 20,3 m²</span></div>
+  <div class="room"><b>Büro</b><span>3,09 × 4,08 m · ca. 12,3 m²</span></div>
+  <div class="room"><b>Schlafzimmer</b><span>3,34 × 4,07 m · ca. 13,4 m²</span></div>
 
   <h2>Möbel</h2>
   <div class="src"><span id="srcInfo">Lade Tabelle …</span><button id="reload">Neu laden</button></div>
@@ -122,10 +126,18 @@ const CFG = {
 };
 /* Koordinaten: x nach rechts (Osten), z nach unten (Süden), wie auf den Skizzen.
    Küche:       x 0..500, z 0..406
-   Wohnzimmer:  x 0..506, z 421..818, Kaminecke oben rechts 43 × 86 */
+   Wohnzimmer:  x 0..506, z 421..818, Kaminecke oben rechts 43 × 86
+   Büro:        x 515..824, z 0..408, Ecke unten rechts schräg (Tür)
+   Schlafzimmer x 839..1173, z 0..407, Ecke unten links schräg (Tür) */
 const K = { x1: 0, x2: 500, z1: 0, z2: 406 };
 const W = { x1: 0, x2: 506, z1: 406 + CFG.tInt, z2: 406 + CFG.tInt + 397 };
 const CH = { x1: 463, x2: W.x2 + CFG.tInt, z1: W.z1, z2: W.z1 + 86 }; // Kamin
+// Büro: Nord 309, West 408, Süd 238, schräge Ecke 13 | Tür 97 | 7 (Ost-Wand ergibt sich: 315)
+const B = { x1: K.x2 + CFG.tInt, x2: K.x2 + CFG.tInt + 309, z1: 0, z2: 408 };
+const BA = [B.x2, 315], BB = [B.x1 + 238, B.z2];           // schräge Wand: Spitze -> Südwand
+// Schlafzimmer: Nord 334, Ost 407, Süd 291, West 304, schräge Ecke 10 | Tür 92 | 16
+const SZ = { x1: B.x2 + CFG.tInt, x2: B.x2 + CFG.tInt + 334, z1: 0, z2: 407 };
+const SA = [SZ.x1, 304], SB = [SZ.x2 - 291, SZ.z2];        // schräge Wand: Spitze -> Südwand
 
 document.getElementById('assume').innerHTML =
   `Raumhöhe ${CFG.ceiling} cm, Fensterbrüstung ${CFG.sill} cm, Fenster­oberkante ${CFG.winTop} cm, ` +
@@ -150,11 +162,11 @@ scene.background = new THREE.Color(0xe9edf1);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xcdb89a, 1.6));
 const sun = new THREE.DirectionalLight(0xfff4e6, 1.8);
-sun.position.set(5, 16, 7);
-sun.target.position.set(2.6, 0, 4.2);
+sun.position.set(8.4, 16, 7);
+sun.target.position.set(6, 0, 4.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 40 });
+Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 8, bottom: -8, near: 1, far: 40 });
 sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 
@@ -265,6 +277,18 @@ function wallZ(g, xa, xb, z1, z2, ops = []) {
   }
   box(g, xa, xb, 0, H, cur, z2, M);
 }
+// Schräge Wand von A nach B; Wandkörper liegt hinter der Linie (lokal -z), lokal +z zeigt in den Raum
+function wallSeg(g, A, Bp, T, ops = [], flip = false) {
+  const dx = Bp[0] - A[0], dz = Bp[1] - A[1], L = Math.hypot(dx, dz);
+  const th = Math.atan2(-dz, dx), Lg = local(g, A[0], A[1], th), M = g.userData.wallMats;
+  const [z1, z2] = flip ? [0, T] : [-T, 0];
+  let cur = 0;
+  for (const o of [...ops].sort((p, q) => p.a - q.a)) {
+    box(Lg, cur, o.a, 0, H, z1, z2, M); box(Lg, o.a, o.b, o.hi, H, z1, z2, M); cur = o.b;
+  }
+  box(Lg, cur, L, 0, H, z1, z2, M);
+  return { th, L, at: (t) => [A[0] + dx / L * t, A[1] + dz / L * t] };
+}
 const win = (a, w) => ({ a, b: a + w, lo: CFG.sill, hi: CFG.winTop, w });
 const dr = (a, w) => ({ a, b: a + w, lo: 0, hi: CFG.doorH, w });
 
@@ -332,8 +356,11 @@ floor(W.x1, W.x2, W.z1, W.z2);
 floor(226, 323, K.z2, W.z1);               // Türschwelle Küche/Wohnzimmer
 floor(W.x2, W.x2 + tI, W.z1 + 86 + 111, W.z1 + 86 + 208); // Türschwelle zum Flur
 box(scene, -tE, CH.x2, -12, -2, -tE, W.z2 + tE, MAT.slab, false);
+floor(B.x1, B.x2, B.z1, B.z2);
+floor(SZ.x1, SZ.x2, SZ.z1, SZ.z2);
+box(scene, CH.x2, SZ.x2 + tE, -12, -2, -tE, B.z2 + tI, MAT.slab, false);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), MAT.ground);
-ground.rotation.x = -Math.PI / 2; ground.position.set(2.5, -0.121, 4.1); ground.receiveShadow = true; scene.add(ground);
+ground.rotation.x = -Math.PI / 2; ground.position.set(6, -0.121, 4.1); ground.receiveShadow = true; scene.add(ground);
 
 /* ================= Wände ================= */
 // Küche Nord (Außenwand): 100 | Fenster 106 | 113 | Fenster 106 | 74
@@ -378,11 +405,51 @@ const de = dr(CH.z2 + 111, 97);
 wallZ(gWE, W.x2, W.x2 + tI, CH.z2, W.z2, [de]);
 door(gWE, W.x2, de.a + 48.5, EAST, 97, -1, tI); // Anschlag Nord, öffnet ins Wohnzimmer
 
+// ---------- Büro ----------
+// Nord (Außenwand): 26 | Fenster 89 | 103 | Fenster 85 | 6
+const gBN = wallGroup('Büro Nord', 'z');
+const bn1 = win(B.x1 + 26, 89), bn2 = win(B.x1 + 218, 85);
+wallX(gBN, -tE, 0, K.x2 + tI, B.x2 + tI, [bn1, bn2]);
+windowAt(gBN, bn1.a + 44.5, 0, N, 89, tE); windowAt(gBN, bn2.a + 42.5, 0, N, 85, tE);
+// Süd zum Flur: 238
+const gBS = wallGroup('Büro Süd', 'z');
+wallX(gBS, B.z2, B.z2 + tI, K.x2, BB[0] + 6);
+// Zwischenwand Büro / Schlafzimmer
+const gBSZ = wallGroup('Wand Büro/Schlafzimmer', 'x');
+wallZ(gBSZ, B.x2, SZ.x1, 0, BA[1]);
+// schräge Ecke Büro: von der Spitze 13 | Tür 97 | 7, Tür öffnet ins Büro, Anschlag an der Südwand-Seite
+const gBD = wallGroup('Büro Tür', null);
+const bd = dr(13, 97), bdw = wallSeg(gBD, BA, BB, tI, [bd]);
+{ const c = bdw.at(bd.a + 48.5); door(gBD, c[0], c[1], bdw.th, 97, 1, tI); }
+
+// ---------- Schlafzimmer ----------
+// Nord (Außenwand): 138 | Fenster 85 | 111
+const gSN = wallGroup('Schlafzimmer Nord', 'z');
+const sn = win(SZ.x1 + 138, 85);
+wallX(gSN, -tE, 0, B.x2 + tI, SZ.x2 + tE, [sn]);
+windowAt(gSN, sn.a + 42.5, 0, N, 85, tE);
+// Ost (Außenwand): 173 | Fenster 85 | 149
+const gSE = wallGroup('Schlafzimmer Ost', 'x');
+const se = win(173, 85);
+wallZ(gSE, SZ.x2, SZ.x2 + tE, 0, SZ.z2 + tI, [se]);
+windowAt(gSE, SZ.x2, se.a + 42.5, EAST, 85, tE);
+// Süd zum Flur: 291
+const gSS = wallGroup('Schlafzimmer Süd', 'z');
+wallX(gSS, SZ.z2, SZ.z2 + tI, SB[0] - 6, SZ.x2);
+// schräge Ecke Schlafzimmer: gemessen 10 | Tür 92 | 16, Wand ist rechnerisch 112 lang -> kleine Stücke gekürzt
+const gSD = wallGroup('Schlafzimmer Tür', null);
+const sLen = Math.hypot(SA[0] - SB[0], SA[1] - SB[1]), sRest = (sLen - 92) / 26;
+const sd = dr(10 * sRest, 92), sdw = wallSeg(gSD, SB, SA, tI, [sd]);
+{ const c = sdw.at(sd.a + 46); door(gSD, c[0], c[1], sdw.th, 92, -1, tI); }
+
 /* ================= Heizkörper ================= */
 radiator(375, 0, N, 100);                  // Küche Nord, 75 cm von der Ecke
 radiator(0, kw.a + 53, WEST, 100);         // Küche West
 radiator(0, ww.a + 54.5, WEST, 100);       // Wohnzimmer West
 radiator(ws.a + 54.5, W.z2, SOUTH, 100);   // Wohnzimmer Süd
+radiator(B.x1 + 166.5, 0, N, 100);         // Büro Nord, zwischen den Fenstern
+radiator(sn.a + 42.5, 0, N, 80);           // Schlafzimmer Nord
+radiator(SZ.x2, se.a + 42.5, EAST, 80);    // Schlafzimmer Ost
 
 /* ================= Beschriftung ================= */
 function textMesh(lines, heightM, { bold = false, color = '#4a4f55', bg = null } = {}) {
@@ -438,6 +505,16 @@ dimChain(0, W.z1, 1, 0, N, [[227], [97, 'T'], [139]]);
 dimChain(0, W.z1, 0, 1, WEST, [[125], [109, 'F'], [162]]);
 dimChain(0, W.z2, 1, 0, SOUTH, [[214], [109, 'F'], [181]]);
 dimChain(W.x2, CH.z2, 0, 1, EAST, [[111], [97, 'T'], [103]]);
+// Büro
+dimChain(B.x1, 0, 1, 0, N, [[26], [89, 'F'], [103], [85, 'F'], [6]]);
+dimChain(B.x1, 0, 0, 1, WEST, [[408]]);
+dimChain(B.x1, B.z2, 1, 0, SOUTH, [[238]]);
+dimChain(B.x2, 0, 0, 1, EAST, [[315]]);
+// Schlafzimmer
+dimChain(SZ.x1, 0, 1, 0, N, [[138], [85, 'F'], [111]]);
+dimChain(SZ.x2, 0, 0, 1, EAST, [[173], [85, 'F'], [149]]);
+dimChain(SB[0], SZ.z2, 1, 0, SOUTH, [[291]]);
+dimChain(SZ.x1, 0, 0, 1, WEST, [[304]]);
 // Raumnamen
 function roomLabel(name, sub, cx, cz) {
   const t = textMesh([name, sub], 0.30, { bold: true, color: '#3b3f44', bg: 'rgba(255,255,255,.55)' });
@@ -445,6 +522,8 @@ function roomLabel(name, sub, cx, cz) {
 }
 roomLabel('Küche & Esszimmer', '5,00 × 4,06 m · 20,3 m²', 250, 203);
 roomLabel('Wohnzimmer', '5,06 × 3,97 m · 19,7 m²', 240, (W.z1 + W.z2) / 2 + 20);
+roomLabel('Büro', '3,09 × 4,08 m · 12,3 m²', (B.x1 + B.x2) / 2, 190);
+roomLabel('Schlafzimmer', '3,34 × 4,07 m · 13,4 m²', (SZ.x1 + SZ.x2) / 2 + 10, 200);
 
 /* ================= Wandmitten für das Ausblenden ================= */
 for (const g of wallGroups) {
@@ -465,9 +544,11 @@ function makeControls(c) {
   ctl.screenSpacePanning = true;
   return ctl;
 }
-const CENTER = new THREE.Vector3(2.6, 0, 4.1);
+const CENTER = new THREE.Vector3(5.9, 0, 4.1);
 const VIEWS = {
-  all:    { pos: [9.5, 10.5, 12.5], tgt: [2.6, 0, 4.1] },
+  all:    { pos: [12.5, 13.5, 15.5], tgt: [5.9, 0, 4.1] },
+  buero:  { pos: [8.8, 5.6, 8.6], tgt: [6.7, 0.6, 2.0] },
+  schlaf: { pos: [12.6, 5.8, 8.8], tgt: [10.1, 0.6, 2.0] },
   wohn:   { pos: [7.6, 6.2, 11.6], tgt: [2.5, 0.6, 6.1] },
   kueche: { pos: [-3.6, 5.6, -3.4], tgt: [2.6, 0.6, 2.2] },
 };
@@ -495,7 +576,7 @@ document.getElementById('views').addEventListener('click', e => { const v = e.ta
 
 function fitOrtho() {
   const w = view.clientWidth, h = view.clientHeight, a = w / h;
-  const needW = 6.6, needH = 9.6;
+  const needW = 12.6, needH = 9.6;
   let hh = needH / 2; if (hh * a < needW / 2) hh = needW / 2 / a;
   Object.assign(ortho, { left: -hh * a, right: hh * a, top: hh, bottom: -hh });
   ortho.updateProjectionMatrix();
@@ -517,7 +598,9 @@ const SHEET_ID = '1nRjSqdL7otcTf_gF3PO2mFVTne5fyzw_0WTz53kyq9M';
 const ROOMS = [
   { tab: 'Wohnzimmer', rect: { x1: W.x1, x2: W.x2, z1: W.z1, z2: W.z2 } },
   { tab: 'Küche & Esszimmer', rect: { x1: K.x1, x2: K.x2, z1: K.z1, z2: K.z2 } },
-  { tab: 'Büro' }, { tab: 'Schlafzimmer' }, { tab: 'Badezimmer' }, { tab: 'Gang & Treppenhaus' },
+  { tab: 'Büro', rect: { x1: B.x1, x2: B.x2, z1: B.z1, z2: B.z2 } },
+  { tab: 'Schlafzimmer', rect: { x1: SZ.x1, x2: SZ.x2, z1: SZ.z1, z2: SZ.z2 } },
+  { tab: 'Badezimmer' }, { tab: 'Gang & Treppenhaus' },
 ];
 // Hindernisse im Grundriss (Kamin, Heizkörper), in cm
 const OBST = [
@@ -526,6 +609,13 @@ const OBST = [
   { x1: 0, x2: 14, z1: kw.a + 3, z2: kw.a + 103 },
   { x1: 0, x2: 14, z1: ww.a + 4.5, z2: ww.a + 104.5 },
   { x1: ws.a + 4.5, x2: ws.a + 104.5, z1: W.z2 - 14, z2: W.z2 },
+  // Büro: Heizkörper + schräge Türecke (Treppenstufen entlang der Schräge)
+  { x1: B.x1 + 116.5, x2: B.x1 + 216.5, z1: 0, z2: 14 },
+  { x1: 812, x2: B.x2, z1: 315, z2: 346 }, { x1: 788, x2: B.x2, z1: 346, z2: 377 }, { x1: 765, x2: B.x2, z1: 377, z2: B.z2 },
+  // Schlafzimmer: Heizkörper + schräge Türecke
+  { x1: sn.a + 2.5, x2: sn.a + 82.5, z1: 0, z2: 14 },
+  { x1: SZ.x2 - 14, x2: SZ.x2, z1: se.a + 2.5, z2: se.a + 82.5 },
+  { x1: SZ.x1, x2: 846, z1: 304, z2: 338 }, { x1: SZ.x1, x2: 861, z1: 338, z2: 373 }, { x1: SZ.x1, x2: 875, z1: 373, z2: SZ.z2 },
 ];
 // Stand der Tabelle beim Bauen – wird nur benutzt, wenn die Tabelle nicht geladen werden kann (offline)
 const SNAPSHOT = {
@@ -1174,6 +1264,7 @@ function buildItems() {
       layout[base] = def ? { on: true, x: def.x, z: def.z, rot: def.rot, mirror: !!def.mirror }
         : { on: false, x: (rr.x1 + rr.x2) / 2, z: (rr.z1 + rr.z2) / 2, rot: 0, mirror: false };
     }
+    if (r.rect && layout[base].x === 0 && layout[base].z === 0) { layout[base].x = (rr.x1 + rr.x2) / 2; layout[base].z = (rr.z1 + rr.z2) / 2; }
     const n = Math.max(1, Math.min(20, layout[base].count || parseInt(it.Anzahl) || 1));
     for (let k = 0; k < n; k++) {
       const id = k ? `${base}#${k}` : base;
