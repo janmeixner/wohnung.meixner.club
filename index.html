@@ -155,7 +155,7 @@ sun.target.position.set(2.6, 0, 4.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 40 });
-sun.shadow.bias = -0.0005;
+sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 
 /* ================= Texturen ================= */
@@ -454,7 +454,7 @@ for (const g of wallGroups) {
 }
 
 /* ================= Kameras ================= */
-const persp = new THREE.PerspectiveCamera(42, 1, 0.05, 200);
+const persp = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
 const ortho = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
 let cam = persp;
 let controls = makeControls(persp);
@@ -828,7 +828,7 @@ function buildKitchen(g, it, sz, cols) {
   const x0 = -W_ / 2, z0 = -T / 2, zf = T / 2, plinth = 10, gap = .4;
   const fr = (x1, x2, y1, y2) => { box(g, x1 + gap, x2 - gap, y1 + gap, y2 - gap, zf - 2, zf, front); box(g, x1 + gap, x2 - gap, y2 - gap - 1.2, y2 - gap, zf, zf + .4, acc); };
   // Unterschränke
-  box(g, x0, x0 + bw, 0, plinth, z0, zf - 6, top);
+  box(g, x0, x0 + bw, 0, plinth - .2, z0 + .5, zf - 6, top);
   box(g, x0, x0 + bw, plinth, bh, z0, zf - 2, carcass);
   box(g, x0, x0 + bw, bh, bh + 3.8, z0, zf + 1, top);
   const mods = bw >= 200 ? [bw - 146, 88, 58] : [bw];
@@ -852,7 +852,7 @@ function buildKitchen(g, it, sz, cols) {
   // Hochschrank
   if (tw > 0) {
     const xt = W_ / 2 - tw;
-    box(g, xt, W_ / 2, 0, plinth, z0, zf - 6, top);
+    box(g, xt + .5, W_ / 2 - .5, 0, plinth - .2, z0 + .5, zf - 6, top);
     box(g, xt, W_ / 2, plinth, H_, z0, zf - 2, carcass);
     const cw = tw / 2;
     for (let k = 0; k < 2; k++) { fr(xt + k * cw, xt + (k + 1) * cw, plinth, 130); fr(xt + k * cw, xt + (k + 1) * cw, 130, H_); }
@@ -907,7 +907,7 @@ function buildGeneric(g, type, it, sz, cols) {
     const nd = parseInt((t.match(/(\d+)\s*schublade/) || [])[1] || '0'), no = parseInt((t.match(/(\d+)\s*offene/) || [])[1] || '0');
     const pl = 6, top = 2.5;
     box(g, -W_ / 2 + 2, W_ / 2 - 2, 0, pl, -T / 2 + 3, T / 2 - 5, mat('#1d1e20', .6));
-    box(g, -W_ / 2, W_ / 2, pl, H_, -T / 2, T / 2 - 1, m);
+    box(g, -W_ / 2 + .2, W_ / 2 - .2, pl, H_ - top, -T / 2 + .2, T / 2 - 1, m);
     box(g, -W_ / 2, W_ / 2, H_ - top, H_, -T / 2, T / 2, acc);
     const rows = [nd ? { n: nd, kind: 'd' } : null, no ? { n: no, kind: 'o' } : null].filter(Boolean);
     const rh = (H_ - pl - top) / Math.max(1, rows.length);
@@ -1030,9 +1030,21 @@ function snap(f) {
   if (Math.abs(a.x1 - rr.x1) < T) st.x += rr.x1 - a.x1; else if (Math.abs(a.x2 - rr.x2) < T) st.x += rr.x2 - a.x2;
   if (Math.abs(a.z1 - rr.z1) < T) st.z += rr.z1 - a.z1; else if (Math.abs(a.z2 - rr.z2) < T) st.z += rr.z2 - a.z2;
   // im Raum halten
-  const c = footprint(st, f.size);
-  if (c.x2 - c.x1 <= rr.x2 - rr.x1) { if (c.x1 < rr.x1) st.x += rr.x1 - c.x1; else if (c.x2 > rr.x2) st.x -= c.x2 - rr.x2; }
-  if (c.z2 - c.z1 <= rr.z2 - rr.z1) { if (c.z1 < rr.z1) st.z += rr.z1 - c.z1; else if (c.z2 > rr.z2) st.z -= c.z2 - rr.z2; }
+  const clampRoom = () => {
+    const c = footprint(st, f.size);
+    if (c.x2 - c.x1 <= rr.x2 - rr.x1) { if (c.x1 < rr.x1) st.x += rr.x1 - c.x1; else if (c.x2 > rr.x2) st.x -= c.x2 - rr.x2; }
+    if (c.z2 - c.z1 <= rr.z2 - rr.z1) { if (c.z1 < rr.z1) st.z += rr.z1 - c.z1; else if (c.z2 > rr.z2) st.z -= c.z2 - rr.z2; }
+  };
+  clampRoom();
+  // nicht in den Kamin schieben: auf der kürzesten Seite herausdrücken
+  if (f.room === 'Wohnzimmer') for (let pass = 0; pass < 2; pass++) for (const r of rectsOf(f)) {
+    if (!overlap(r, CH)) continue;
+    const push = [[CH.x1 - r.x2, 0], [CH.x2 - r.x1, 0], [0, CH.z1 - r.z2], [0, CH.z2 - r.z1]]
+      .filter(([dx, dz]) => { const t = { x1: r.x1 + dx, x2: r.x2 + dx, z1: r.z1 + dz, z2: r.z2 + dz }; return t.x1 >= rr.x1 - .5 && t.x2 <= rr.x2 + .5 && t.z1 >= rr.z1 - .5 && t.z2 <= rr.z2 + .5; })
+      .sort((a, b) => Math.hypot(...a) - Math.hypot(...b))[0];
+    if (push) { st.x += push[0]; st.z += push[1]; }
+  }
+  clampRoom();
 }
 
 /* ---------- Menü ---------- */
@@ -1241,8 +1253,10 @@ function tick(now) {
       const c = g.userData.center;
       const along = (c.x - tgt.x) * d.x + (c.z - tgt.z) * d.z;
       const facing = g.userData.n ? Math.abs(g.userData.n.dot(d)) : 1;
-      if (along > 0.6 && facing > 0.3) a = 0.1;
+      const wasFaded = g.userData.faded;
+      if (wasFaded ? (along > 0.4 && facing > 0.2) : (along > 0.6 && facing > 0.3)) a = 0.1;
     }
+    g.userData.faded = a < 1;
     const u = g.userData; u.alpha += (a - u.alpha) * 0.18;
     const solid = u.alpha > 0.98;
     for (const [m, base] of u.fade) {
@@ -1262,6 +1276,7 @@ function tick(now) {
 }
 requestAnimationFrame(tick);
 window.__setView = setView; // für Tests
+window.__dbg = () => ({ items, layout, snap, applyState, rectsOf });
 </script>
 </body>
 </html>
