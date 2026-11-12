@@ -436,10 +436,9 @@ windowAt(gSE, SZ.x2, se.a + 42.5, EAST, 85, tE);
 // Süd zum Flur: 291
 const gSS = wallGroup('Schlafzimmer Süd', 'z');
 wallX(gSS, SZ.z2, SZ.z2 + tI, SB[0] - 6, SZ.x2);
-// schräge Ecke Schlafzimmer: gemessen 10 | Tür 92 | 16, Wand ist rechnerisch 112 lang -> kleine Stücke gekürzt
+// schräge Ecke Schlafzimmer: Tür 92 bündig an der Südwand | 16 bis zur Spitze (rechnerisch knapp 20)
 const gSD = wallGroup('Schlafzimmer Tür', null);
-const sLen = Math.hypot(SA[0] - SB[0], SA[1] - SB[1]), sRest = (sLen - 92) / 26;
-const sd = dr(10 * sRest, 92), sdw = wallSeg(gSD, SB, SA, tI, [sd]);
+const sd = dr(0, 92), sdw = wallSeg(gSD, SB, SA, tI, [sd]);
 { const c = sdw.at(sd.a + 46); door(gSD, c[0], c[1], sdw.th, 92, -1, tI); }
 
 /* ================= Heizkörper ================= */
