@@ -304,7 +304,7 @@ function windowAt(g, cx, cz, theta, w, T) {
   const tr = lo + (hi - lo) * 0.74;
   box(L, -w / 2, w / 2, tr - 2.5, tr + 2.5, d1 + 1, d0 - 1, M.frame); // Kämpfer
   box(L, -w / 2 + f, w / 2 - f, lo + f, hi - f, d0 - 3.8, d0 - 3.2, M.glass, false);
-  box(L, -w / 2 - 6, w / 2 + 6, lo - 3, lo, d0, 5, M.wood);           // Fensterbank innen
+  box(L, -w / 2 - 6, w / 2 + 6, lo - 2, lo + 1.2, d0 + 0.5, 5, M.wood); // Fensterbank innen (liegt etwas höher als die Brüstung, sonst flackert sie)
 }
 
 /* ================= Heizkörper (60 cm hoch) ================= */
@@ -388,7 +388,7 @@ windowAt(gWS, ws.a + 54.5, W.z2, SOUTH, 109, tE);
 // Innenwand Küche / Wohnzimmer mit Tür (Küche: 226 | Tür 97 | 179 – Wohnzimmer: 227 | Tür 97 | 139)
 const gMid = wallGroup('Zwischenwand', 'z');
 const dm = dr(226, 97);
-wallX(gMid, K.z2, W.z1, 0, CH.x2, [dm]);
+wallX(gMid, K.z2, W.z1, 0, B.x1, [dm]); // endet bündig mit der Büro-Westwand
 door(gMid, dm.a + 48.5, K.z2, SOUTH, 97, -1, tI); // Anschlag Ost, öffnet in die Küche
 
 // Küche Ost (404, ohne Öffnung)
@@ -1366,6 +1366,7 @@ function tick(now) {
 }
 requestAnimationFrame(tick);
 window.__setView = setView; // für Tests
+window.__cam = (px, py, pz, tx, ty, tz) => { anim = null; persp.position.set(px, py, pz); controls.target.set(tx, ty, tz); controls.update(); };
 window.__dbg = () => ({ items, layout, snap, applyState, rectsOf });
 </script>
 </body>
