@@ -18,6 +18,7 @@
   h1 { font-size: 18px; margin: 0 0 2px; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
   h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+  details > summary { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; cursor: pointer; font-weight: 700; }
   .views { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .views button { font: inherit; font-size: 13px; padding: 8px 6px; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; color: var(--text); }
   .views button:hover { border-color: var(--accent); }
@@ -29,8 +30,16 @@
   .note { font-size: 12px; color: var(--muted); line-height: 1.45; }
   .hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); background: rgba(255,255,255,.85); padding: 5px 9px; border-radius: 6px; pointer-events: none; }
   .rgrp { margin-bottom: 10px; }
-  .rgrp > .rh { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; padding: 4px 0; }
-  .rgrp > .rh span { color: var(--muted); font-weight: 400; }
+  .rgrp > .rh { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 6px; border-radius: 8px; cursor: pointer; user-select: none; background: #f4f5f6; }
+  .rgrp > .rh:hover { background: #eceef0; }
+  .rgrp > .rh::before { content: '▾'; color: var(--muted); width: 12px; }
+  .rgrp.closed > .rh::before { content: '▸'; }
+  .rgrp > .rh .t { flex: 1; font-weight: 600; }
+  .rgrp > .rh span { color: var(--muted); }
+  .rgrp.closed > .item { display: none; }
+  .item img.th { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; background: #f1f2f3; }
+  #menuTog { display: none; }
+  #insp.drag { opacity: .25; pointer-events: none; }
   .item { display: flex; gap: 8px; align-items: flex-start; padding: 7px 8px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
   .item:hover { background: #f6f7f8; }
   .item.sel { border-color: var(--accent); background: var(--accent-soft); }
@@ -62,8 +71,29 @@
   #insp .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   @media (max-width: 760px) {
     body { flex-direction: column-reverse; }
-    #panel { width: 100%; height: 42%; border-right: 0; border-top: 1px solid var(--line); }
+    #panel { width: 100%; height: 42%; border-right: 0; border-top: 1px solid var(--line); padding-top: 0; }
     #view { height: 58%; flex: none; }
+    #menuTog { display: flex; position: sticky; top: 0; z-index: 3; width: 100%; height: 44px; align-items: center; justify-content: space-between; background: #fff; border: 0; border-bottom: 1px solid var(--line); margin-bottom: 10px; padding: 0; font: inherit; font-size: 15px; font-weight: 600; color: var(--text); }
+    body.menu-closed #panel { height: 44px; overflow: hidden; }
+    body.menu-closed #view { height: calc(100% - 44px); }
+    h1, .sub { display: none; }
+    .views { grid-template-columns: 1fr 1fr 1fr; }
+    .views button { padding: 9px 2px; }
+    h2 { margin: 12px 0 6px; }
+    .hint { display: none; }
+    .item { padding: 9px 8px; }
+    .item input { width: 20px; height: 20px; margin-top: 1px; }
+    .cnt button { width: 30px; height: 30px; }
+    .sw button { width: 26px; height: 26px; }
+    /* Möbel-Kasten: schmale Leiste unten, beim Verschieben ganz weg */
+    #insp { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; padding: 7px 10px 8px; }
+    #insp .row, #insp .sw, #insp .swname { display: none; }
+    #insp .row.warn { display: block; margin: 0 0 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #insp b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; margin-bottom: 6px; padding-right: 26px; }
+    #insp .x { font-size: 24px; top: 0; right: 6px; }
+    #insp .btns { margin-top: 0; flex-wrap: nowrap; overflow-x: auto; }
+    #insp .btns button { padding: 9px 12px; font-size: 14px; white-space: nowrap; }
+    #insp.drag { display: none !important; }
   }
 </style>
 <script type="importmap">
@@ -75,6 +105,7 @@
 </head>
 <body>
 <aside id="panel">
+  <button id="menuTog" type="button"><span>Menü &amp; Möbel</span><span id="menuTogI">▾ einklappen</span></button>
   <h1>Wohnung – 3D-Planer</h1>
   <div class="sub">Küche/Esszimmer, Wohnzimmer, Büro und Schlafzimmer, maßstabsgetreu</div>
 
@@ -88,25 +119,26 @@
     <button data-view="schlaf">Schlafzimmer</button>
   </div>
 
-  <h2>Optionen</h2>
+  <details id="optBox" open><summary>Optionen</summary>
   <label class="opt"><input type="checkbox" id="optFade" checked> Wände vorne ausblenden</label>
   <label class="opt"><input type="checkbox" id="optDims" checked> Maße anzeigen</label>
   <label class="opt"><input type="checkbox" id="optDoors" checked> Türen offen</label>
-
-  <h2>Räume</h2>
-  <div class="room"><b>Wohnzimmer</b><span>5,06 × 3,97 m · ca. 19,7 m²</span></div>
-  <div class="room"><b>Küche &amp; Esszimmer</b><span>5,00 × 4,06 m · ca. 20,3 m²</span></div>
-  <div class="room"><b>Büro</b><span>3,09 × 4,08 m · ca. 12,3 m²</span></div>
-  <div class="room"><b>Schlafzimmer</b><span>3,34 × 4,07 m · ca. 13,4 m²</span></div>
+  </details>
 
   <h2>Möbel</h2>
   <div class="src"><span id="srcInfo">Lade Tabelle …</span><button id="reload">Neu laden</button></div>
   <div class="sum" id="sum"></div>
   <div id="furn"></div>
-  <div class="note">Anhaken = einblenden. Im 3D-Modell anklicken und ziehen zum Verschieben, Taste R dreht um 90° (Shift+R um 15°). Positionen werden in diesem Browser gespeichert.</div>
+  <div class="note">Anhaken = einblenden. Raum-Überschrift antippen = ein-/ausklappen. Im 3D-Modell anklicken und ziehen zum Verschieben, drehen über die Knöpfe am Möbel (oder Taste R, Shift+R für 15°). Positionen werden in diesem Browser gespeichert.</div>
 
-  <h2>Annahmen</h2>
+  <details><summary>Räume &amp; Annahmen</summary>
+  <div class="room"><b>Wohnzimmer</b><span>5,06 × 3,97 m · ca. 19,7 m²</span></div>
+  <div class="room"><b>Küche &amp; Esszimmer</b><span>5,00 × 4,06 m · ca. 20,3 m²</span></div>
+  <div class="room"><b>Büro</b><span>3,09 × 4,08 m · ca. 12,3 m²</span></div>
+  <div class="room"><b>Schlafzimmer</b><span>3,34 × 4,07 m · ca. 13,4 m²</span></div>
+
   <div class="note" id="assume"></div>
+  </details>
 </aside>
 <div id="view"><div id="insp"></div><div class="hint">Ziehen = drehen · Rechtsklick/zwei Finger = verschieben · Mausrad = zoomen</div></div>
 
@@ -179,27 +211,38 @@ function canvasTex(w, h, draw) {
   t.anisotropy = 8;
   return t;
 }
-// Dielenboden (Kiefer), Dielen laufen Ost-West; Kachel = 2 × 2 m
+// Dielenboden (Kiefer, honigfarben nachgedunkelt, mit Ästen), Dielen laufen Ost-West; Kachel = 2 × 2 m
 const floorTex = canvasTex(1024, 1024, (g, w, h) => {
-  const plank = 72; // ≈ 14 cm
+  const plank = 1024 / 14; // ≈ 14 cm breite Dielen
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let y = 0; y < h; y += plank) {
-    let x = -rnd() * 500;
+  for (let r = 0; r < 14; r++) {
+    const y = r * plank;
+    let x = -rnd() * 600;
     while (x < w) {
-      const len = 500 + rnd() * 500;
-      const l = 64 + rnd() * 5;
-      g.fillStyle = `hsl(${30 + rnd() * 5}, ${48 + rnd() * 10}%, ${l}%)`;
+      const len = 520 + rnd() * 500, hue = 24 + rnd() * 5, sat = 52 + rnd() * 9, l = 41 + rnd() * 7;
+      g.fillStyle = `hsl(${hue}, ${sat}%, ${l}%)`;
       g.fillRect(x, y, len, plank);
-      g.globalAlpha = 0.06;
-      for (let k = 0; k < 6; k++) { // Maserung
-        g.fillStyle = rnd() > .5 ? '#7a4a1e' : '#fff3dc';
-        g.fillRect(x, y + rnd() * plank, len, 1 + rnd() * 2);
+      // Maserung: lange, leicht geschwungene Linien
+      for (let k = 0; k < 9; k++) {
+        g.globalAlpha = .08 + rnd() * .14; g.strokeStyle = rnd() > .3 ? '#6e3a12' : '#ffd9a0'; g.lineWidth = .8 + rnd() * 1.8;
+        const yy = y + 4 + rnd() * (plank - 8), a = (rnd() - .5) * 9;
+        g.beginPath(); g.moveTo(x, yy); g.bezierCurveTo(x + len * .3, yy + a, x + len * .7, yy - a, x + len, yy); g.stroke();
+      }
+      // Äste
+      const knots = rnd() < .75 ? 1 + Math.floor(rnd() * 2) : 0;
+      for (let k = 0; k < knots; k++) {
+        const kx = x + 30 + rnd() * (len - 60), ky = y + 14 + rnd() * (plank - 28), kr = 4 + rnd() * 6;
+        g.globalAlpha = .3; g.strokeStyle = '#6e3a12'; g.lineWidth = 1.2;
+        for (let q = 1; q <= 2; q++) { g.beginPath(); g.ellipse(kx, ky, kr * (1.6 + q * 1.1), kr * (.9 + q * .5), 0, 0, Math.PI * 2); g.stroke(); }
+        g.globalAlpha = .85; g.fillStyle = '#5a2c0e'; g.beginPath(); g.ellipse(kx, ky, kr * 1.25, kr, 0, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = .6; g.fillStyle = '#2e1506'; g.beginPath(); g.ellipse(kx, ky, kr * .6, kr * .5, 0, 0, Math.PI * 2); g.fill();
       }
       g.globalAlpha = 1;
-      g.fillStyle = 'rgba(80,45,15,.55)'; g.fillRect(x, y, 2, plank);
+      g.fillStyle = 'rgba(60,30,8,.7)'; g.fillRect(x, y, 2, plank);
       x += len;
     }
-    g.fillStyle = 'rgba(80,45,15,.6)'; g.fillRect(0, y, w, 2);
+    g.fillStyle = 'rgba(50,25,6,.75)'; g.fillRect(0, y, w, 2.5);
+    g.fillStyle = 'rgba(255,225,170,.18)'; g.fillRect(0, y + 2.5, w, 1.5);
   }
 });
 const radTex = canvasTex(32, 8, (g, w, h) => {
@@ -212,7 +255,7 @@ const radTex = canvasTex(32, 8, (g, w, h) => {
 const MAT = {
   floor: (w, d) => {
     const t = floorTex.clone(); t.needsUpdate = true; t.repeat.set(w / 200, d / 200);
-    return new THREE.MeshStandardMaterial({ map: t, roughness: .75 });
+    return new THREE.MeshStandardMaterial({ map: t, roughness: .6 });
   },
   slab: new THREE.MeshStandardMaterial({ color: 0x8d9298, roughness: 1 }),
   ground: new THREE.MeshStandardMaterial({ color: 0xdfe4e8, roughness: 1 }),
@@ -229,9 +272,15 @@ function box(parent, x1, x2, y1, y2, z1, z2, mat, cast = true) {
   const [az, bz] = [Math.min(z1, z2), Math.max(z1, z2)];
   if (bx - ax <= 0.01 || by - ay <= 0.01 || bz - az <= 0.01) return null;
   const m = new THREE.Mesh(new THREE.BoxGeometry((bx - ax) * S, (by - ay) * S, (bz - az) * S), mat);
+  if (mat.userData && mat.userData.unit) uvFit(m, bx - ax, by - ay, bz - az, mat.userData.unit);
   m.position.set((ax + bx) / 2 * S, (ay + by) / 2 * S, (az + bz) / 2 * S);
   m.castShadow = cast; m.receiveShadow = true;
   parent.add(m); return m;
+}
+// Muster-Koordinaten eines Quaders auf echte Maße bringen (unit = cm je Muster-Kachel)
+function uvFit(mesh, w, h, d, unit) {
+  const uv = mesh.geometry.attributes.uv, n = uv.count / 6, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let i = 0; i < uv.count; i++) { const f = Math.min(5, Math.floor(i / n)); uv.setXY(i, uv.getX(i) * dims[f][0] / unit, uv.getY(i) * dims[f][1] / unit); }
 }
 // Lokales Koordinatensystem an einer Wand: x entlang der Wand (Mitte = 0), z zeigt in den Raum
 function local(parent, cx, cz, theta) {
@@ -552,8 +601,11 @@ const VIEWS = {
   kueche: { pos: [-3.6, 5.6, -3.4], tgt: [2.6, 0.6, 2.2] },
 };
 let anim = null;
+const VIEW_ROOM = { wohn: 'Wohnzimmer', kueche: 'Küche & Esszimmer', buero: 'Büro', schlaf: 'Schlafzimmer' };
+let openRooms = null; // null = alle Räume im Menü aufgeklappt
 function setView(name) {
   document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+  openRooms = VIEW_ROOM[name] ? new Set([VIEW_ROOM[name]]) : null; renderMenu();
   if (name === 'top') {
     if (cam !== ortho) { controls.dispose(); cam = ortho; controls = makeControls(ortho); }
     controls.enableRotate = false;
@@ -585,6 +637,12 @@ function resize() {
   renderer.setSize(w, h); persp.aspect = w / h; persp.updateProjectionMatrix(); fitOrtho();
 }
 addEventListener('resize', resize); resize();
+new ResizeObserver(resize).observe(view);
+if (matchMedia('(max-width: 760px)').matches) document.getElementById('optBox').open = false;
+document.getElementById('menuTog').onclick = () => {
+  const c = document.body.classList.toggle('menu-closed');
+  document.getElementById('menuTogI').textContent = c ? '▴ ausklappen' : '▾ einklappen';
+};
 
 /* ================= Optionen ================= */
 const opt = { fade: true, doors: true };
@@ -621,6 +679,7 @@ const SNAPSHOT = {
  "Wohnzimmer": [
   {
    "Link": "https://www.otto.de/p/otto-home-ecksofa-jonaa-l-form-241cm-inkl-schlaffunktion-weicher-cordstoff-tonnentaschen-federkern-bettkasten-schlafsofa-133-200-2137832620/",
+   "Bild": "https://i.otto.de/i/otto/1519f4e5-7a73-53a6-88da-780ba9cb0963/otto-home-ecksofa-jonaa-l-form-241cm-inkl-schlaffunktion-weicher-cordstoff-tonnentaschen-federkern-bettkasten-schlafsofa-133-200-creme.jpg?$formatz$",
    "Kategorie": "Ecksofa",
    "Name": "Ecksofa Jonaa, L-Form, 241 cm, Schlaffunktion, Cord creme",
    "Hersteller": "OTTO home (über Otto)",
@@ -628,10 +687,12 @@ const SNAPSHOT = {
    "Preis": "488,99 €",
    "Status": "Idee",
    "Farbe": "creme (Cord) #e6dccb, Füße #1e1e1e; anthrazit (Cord) #4a4b4f, Füße #1e1e1e",
-   "Form": "L-Sofa | Tiefe 86 | Recamiere 70 breit, links | Armlehnen 20 breit, 57 hoch | Sitzhöhe 42"
+   "Form": "L-Sofa | Tiefe 86 | Recamiere 70 breit, links | Armlehnen 20 breit, 57 hoch | Sitzhöhe 42 | 3 Rückenkissen | Füße 4",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.amazon.de/ACAZA-Couchtisch-Nussbaum-Braun-Holz/dp/B0HP33W3QN",
+   "Bild": "",
    "Kategorie": "Couchtisch",
    "Name": "ACAZA Couchtisch oval, Nussbaum",
    "Hersteller": "ACAZA (über Amazon)",
@@ -639,10 +700,12 @@ const SNAPSHOT = {
    "Preis": "78,99 €",
    "Status": "Idee",
    "Farbe": "Nussbaum braun #7b5235",
-   "Form": "Tisch oval | Säulenfuß gerillt"
+   "Form": "Couchtisch oval | Fuß: schräge Wange + Halbsäule | Platte 3",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.moebel-kempf.de/p/ecksofa-liana-11160",
+   "Bild": "",
    "Kategorie": "Ecksofa",
    "Name": "Ecksofa LIANA, Cord dunkelgrau, elektr. Sitztiefenverstellung",
    "Hersteller": "Iwaniccy (über Möbel Kempf)",
@@ -650,10 +713,12 @@ const SNAPSHOT = {
    "Preis": "1.999,00 €",
    "Status": "Idee",
    "Farbe": "dunkelgrau (Cord) #55575b, Füße #2a2a2a; schwarz (Cord) #2b2b2d, Füße #2a2a2a",
-   "Form": "L-Sofa | Tiefe 100 | Recamiere 100 breit, links | Armlehnen 20 breit, 62 hoch | Sitzhöhe 45 | Teilmaße geschätzt"
+   "Form": "L-Sofa | Tiefe 100 | Recamiere 100 breit, links | Armlehnen 28 breit, 62 hoch | Sitzhöhe 45 | 5 Kopfstützen | Sitz gesteppt | Füße 12 Metall | Teilmaße geschätzt",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.moebel-kempf.de/p/tv-lowboard-norman-15839",
+   "Bild": "",
    "Kategorie": "TV-Lowboard",
    "Name": "TV Lowboard NORMAN, Anthrazit matt/Asteiche Dekor",
    "Hersteller": "Mäusbacher (über Möbel Kempf)",
@@ -661,12 +726,14 @@ const SNAPSHOT = {
    "Preis": "429,00 €",
    "Status": "Idee",
    "Farbe": "Anthrazit matt #3e4044, Absetzungen Asteiche #a77d50",
-   "Form": "Lowboard | 3 Schubladen, 5 offene Fächer"
+   "Form": "Lowboard | oben 3 offene Fächer | unten 3 Klappen | Wangen bis zum Boden",
+   "Anzahl": ""
   }
  ],
  "Küche & Esszimmer": [
   {
    "Link": "https://www.otto.de/p/mirjan24-esstisch-gelizo-22-mm-185x90x75-cm-S0HGI02K/?variationId=S0HGI02KU7WG",
+   "Bild": "https://i.otto.de/i/otto/2d3c0db0-f845-5aeb-b300-a2d957993396/mirjan24-esstisch-gelizo-22-mm-185x90x75-cm-nuss-okapi.jpg?$formatz$",
    "Kategorie": "Esstisch",
    "Name": "Esstisch Gelizo, Nuss Okapi",
    "Hersteller": "MIRJAN24 (über Otto)",
@@ -674,10 +741,12 @@ const SNAPSHOT = {
    "Preis": "175,00 €",
    "Status": "Idee",
    "Farbe": "Nuss Okapi #7a5a3c #7a5a3c; Eiche Cremona #c9a77c #c9a77c; Sandbeige #d9c7a7 #d9c7a7; Sandbeige/Travertin #e3d6c3 #d9c7a7; Schwarz/Schwarzer Marmor #2d2d2f #1f1f1f",
-   "Form": "Tisch oval | V-Wangenfüße | Platte 2,2"
+   "Form": "Tisch stadionförmig (gerade Seiten, runde Enden) | Kreuzwangen | Platte 2,2",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.xxxlutz.de/p/p-b-kuechenleerblock-troja-336-4-210-60-cm-in-grau-schwarz-kaschmir-001279000202",
+   "Bild": "https://media.xxxlutz.com/i/xxxlutz/PIqhFx_9wO-hckUrqCf2_SuA/?fmt=auto&w=600",
    "Kategorie": "Küchenblock",
    "Name": "Küchenleerblock Troja, Kaschmirgrau/Schwarz",
    "Hersteller": "P & B (über XXXLutz)",
@@ -685,10 +754,12 @@ const SNAPSHOT = {
    "Preis": "759,00 €",
    "Status": "Idee",
    "Farbe": "Kaschmirgrau #a49c91, Arbeitsplatte #c19a6b Eiche, Akzente #222222 schwarz",
-   "Form": "Küchenzeile | Unterschränke 210 breit, 87 hoch | Hochschrank 126 breit | Hängeschrank 123 × 65 × 31"
+   "Form": "Küchenzeile | Unterschränke 210 breit, 87 hoch | Hochschrank 126 breit, links, mit Backofen | Hängeschrank 123 × 65 × 31 | Dunstabzug schwarz",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.ikea.com/de/de/p/tossberg-stuhl-metall-schwarz-gunnared-dunkelgrau-10582644/",
+   "Bild": "https://www.ikea.com/de/de/images/products/tossberg-stuhl-metall-schwarz-gunnared-dunkelgrau__1360003_pe954328_s5.jpg",
    "Kategorie": "Stuhl",
    "Name": "TOSSBERG Stuhl, Metall schwarz/Gunnared dunkelgrau",
    "Hersteller": "IKEA",
@@ -696,21 +767,25 @@ const SNAPSHOT = {
    "Preis": "79,99 €",
    "Status": "Idee",
    "Farbe": "dunkelgrau #4f5153, Gestell #1c1c1c; hellgrün #a9b8a0, Gestell #1c1c1c; beige #d8cdb9, Gestell #f2f2f2",
-   "Form": "Stuhl | Armlehnen | Rückenlehne rund | Metallbeine | Sitzhöhe 47"
+   "Form": "Stuhl | Sitzschale mit Armlehnen | Kufengestell Metall | Sitzhöhe 47 | Armhöhe 66",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.ikea.com/de/de/p/krylbo-stuhl-tonerud-dunkelbeige-60566745/",
+   "Bild": "https://www.ikea.com/de/de/images/products/krylbo-stuhl-tonerud-dunkelbeige__1208495_pe908606_s5.jpg",
    "Kategorie": "Stuhl",
    "Name": "KRYLBO Stuhl, Tonerud dunkelbeige",
    "Hersteller": "IKEA",
    "Groesse": "55 × 51 × 75",
    "Preis": "59,99 €",
    "Status": "Idee",
-   "Farbe": "dunkelbeige #b7a58c, Gestell #1c1c1c; dunkelrot #6e2a2a, Gestell #1c1c1c; blau #3e5a78, Gestell #1c1c1c",
-   "Form": "Stuhl | Rückenlehne hoch, rund | Metallbeine | Sitzhöhe 49"
+   "Farbe": "dunkelbeige #b7a58c, Gestell #b3a188; dunkelrot #6e2a2a, Gestell #6a2828; blau #3e5a78, Gestell #3b5672",
+   "Form": "Stuhl | Sitz rund | Rückenschale breit | 4 Rohrbeine ausgestellt | Sitzhöhe 49",
+   "Anzahl": ""
   },
   {
    "Link": "https://www.ikea.com/de/de/p/bergshyttan-tisch-dunkelbraun-eschenfurnier-40608242/",
+   "Bild": "https://www.ikea.com/de/de/images/products/bergshyttan-tisch-dunkelbraun-eschenfurnier__1424600_pe979311_s5.jpg",
    "Kategorie": "Esstisch",
    "Name": "BERGSHYTTAN Tisch, dunkelbraun Eschenfurnier",
    "Hersteller": "IKEA",
@@ -718,20 +793,77 @@ const SNAPSHOT = {
    "Preis": "299,00 €",
    "Status": "Idee",
    "Farbe": "dunkelbraun Esche #4a3426",
-   "Form": "Tisch eckig | 4 Beine | Platte 4"
+   "Form": "Tisch eckig | 2 Wangen eingerückt | Platte 5",
+   "Anzahl": ""
+  },
+  {
+   "Link": "https://www.sklum.com/de/kaufen-pack-4-stuhle/241023-pack-mit-4-gepolsterten-esszimmerstuhlen-nairea.html",
+   "Bild": "https://cdn.sklum.com/de/5437343-large_default/pack-mit-4-gepolsterten-esszimmerstuhlen-nairea.jpg",
+   "Kategorie": "Stuhl",
+   "Name": "Nairea Esszimmerstühle gepolstert, 4er Set, Chenille Kaffeebraun, Beine Dark",
+   "Hersteller": "SKLUM",
+   "Groesse": "60 × 52 × 75",
+   "Preis": "319,95 €",
+   "Status": "Idee",
+   "Farbe": "Chenille Kaffeebraun #6b4a3a, Beine #3b2a20; Bouclé Cremebeige #e4dccb, Beine #3b2a20; Grau Taupe #8c857b, Beine #3b2a20; Chenille Salbeigrün #9aa58c, Beine #3b2a20",
+   "Form": "Sessel | Schale rundum | 4 Holzbeine konisch | Sitzhöhe 45 | Armhöhe 62 | Preis für Set 4",
+   "Anzahl": "4"
+  }
+ ],
+ "Büro": [
+  {
+   "Link": "https://www.flexispot.de/eckschreibtisch-e7l.html?gad_source=1&gad_campaignid=22452105506&gbraid=0AAAAABSyTiRrOUdnEhSwMUA_tnl4bH1Sd&gclid=Cj0KCQiA5NXXBhDEARIsABAJhdICR4lnf32QI10Tb_mhi84V8oicyzKIdf6EaMwUP36Fby-IZvwWymcaAqQBEALw_wcB",
+   "Bild": "https://s3.springbeetle.eu/prod-eu-s3/E7L（ET223LE(IB)-ZX）_20261030_QtKCZgj2.png",
+   "Kategorie": "Eckschreibtisch",
+   "Name": "Premium höhenverstellbarer Schreibtisch in L-Form (E7L)",
+   "Hersteller": "FlexiSpot",
+   "Groesse": "180 × 120 × 75",
+   "Preis": "399,99 €",
+   "Status": "Idee",
+   "Farbe": "Platte weiß #f1f1ee, Gestell #f4f4f4; Platte schwarz #2a2a2c, Gestell #f4f4f4",
+   "Form": "Schreibtisch L-Form | Tiefe 60 | Anbau rechts | 3 Hubsäulen | Platte 2,5 | Höhe verstellbar 63,5–128,5",
+   "Anzahl": ""
+  },
+  {
+   "Link": "https://www.flexispot.de/klassischer-l-formiger-hohenverstellbarer-schreibtisch.html?ref=category_products",
+   "Bild": "https://s3.springbeetle.eu/prod-eu-s3/E5L_20261030_r8b5I2o4.png",
+   "Kategorie": "Eckschreibtisch",
+   "Name": "Klassischer höhenverstellbarer Schreibtisch in L-Form (E5L)",
+   "Hersteller": "FlexiSpot",
+   "Groesse": "160 × 110 × 75",
+   "Preis": "249,99 €",
+   "Status": "Idee",
+   "Farbe": "Platte weiß (nicht dabei) #f1f1ee, Gestell #f4f4f4; Platte Eiche (nicht dabei) #c9a77c, Gestell #f4f4f4; Platte schwarz (nicht dabei) #2a2a2c, Gestell #f4f4f4",
+   "Form": "Schreibtisch L-Form | Tiefe 60 | Anbau rechts | 3 Hubsäulen | Platte 2,5 | nur Gestell, Platte extra | Breite 140–190, Seite 100–120, Höhe verstellbar 60–125",
+   "Anzahl": ""
+  },
+  {
+   "Link": "https://www.flexispot.de/backsupport-burostuhl-c7.html?ref=category_products",
+   "Bild": "https://s3.springbeetle.eu/prod-de2-s3/trantor/attachments/DE/2025-MAIN-DE-STUHL-%20(37).png",
+   "Kategorie": "Bürostuhl",
+   "Name": "Ergonomischer Bürostuhl C7",
+   "Hersteller": "FlexiSpot",
+   "Groesse": "70 × 71 × 124",
+   "Preis": "299,99 €",
+   "Status": "Idee",
+   "Farbe": "Schwarz #232325, Gestell #1a1a1a; Grau #8a8d91, Gestell #1a1a1a; Schwarzgrau #3c3e42, Gestell #1a1a1a; Weißgrau #cfd2d4, Gestell #e6e6e6",
+   "Form": "Bürostuhl | Netzrücken | Kopfstütze | Armlehnen | Fußkreuz mit Rollen | Sitzhöhe 52",
+   "Anzahl": ""
   }
  ],
  "Schlafzimmer": [
   {
    "Link": "https://www.beautysofa24.de/product/schiebetuerenschrank-mit-lamellen-helios-ii-kopia/",
+   "Bild": "https://www.beautysofa24.de/wp-content/uploads/2024/05/120-a-a-cz-b_gallery.jpg",
    "Kategorie": "Schrank",
    "Name": "Schiebetürenschrank HELIOS II mit Lamellen",
    "Hersteller": "BeautySofa24",
    "Groesse": "120 / 200 / 240 × 61 × 216 (Breite je nach Variante)",
-   "Preis": "",
+   "Preis": "479,00 € (120 cm)",
    "Status": "Idee",
-   "Farbe": "",
-   "Form": ""
+   "Farbe": "Eiche Artisan + Schwarz #c9a36f, Lamellen #1c1c1c; Grau + Weiß #8e9093, Lamellen #f2f2f0; Kaschmir + Eiche Artisan #cfc4b4, Lamellen #c9a36f; Schwarz + Eiche Artisan #232325, Lamellen #c9a36f; Schwarz + Walnuss #232325, Lamellen #6b4630; Weiß + Eiche Artisan #f3f2ee, Lamellen #c9a36f",
+   "Form": "Schiebetürenschrank | Lamellen auf einer Tür",
+   "Anzahl": ""
   }
  ]
 };
@@ -759,7 +891,7 @@ function rowsFromGviz(r) {
   const cols = r.table.cols.map(c => (c.label || '').trim());
   const find = (re) => cols.findIndex(l => re.test(l));
   const idx = {
-    Link: find(/^link/i), Kategorie: find(/kategorie/i), Name: find(/^name/i), Hersteller: find(/hersteller/i),
+    Link: find(/^link/i), Bild: find(/^bild/i), Kategorie: find(/kategorie/i), Name: find(/^name/i), Hersteller: find(/hersteller/i),
     Groesse: find(/gr(ö|oe)(ß|ss)e/i), Preis: find(/preis/i), Status: find(/status/i), Farbe: find(/farbe/i), Form: find(/^form/i), Anzahl: find(/anzahl|menge|stück/i),
   };
   const out = [];
@@ -781,23 +913,30 @@ function parseSize(t) {
   return n.length >= 3 ? { w: n[0], d: n[1], h: n[2] } : null;
 }
 const DEFAULT_SIZE = {
-  kitchen: [300, 60, 210], sofaL: [240, 160, 80], sofa: [200, 90, 80], table: [120, 75, 75], coffee: [90, 50, 40],
+  kitchen: [300, 60, 210], deskL: [160, 120, 75], sofaL: [240, 160, 80], sofa: [200, 90, 80], table: [120, 75, 75], coffee: [90, 50, 40],
   bed: [160, 200, 90], chair: [45, 52, 90], shelf: [80, 35, 180], cabinet: [120, 45, 90], rug: [200, 140, 1], lamp: [40, 40, 160], box: [60, 60, 60],
 };
 function detectType(it) {
-  const t = `${it.Form} ${it.Kategorie} ${it.Name}`.toLowerCase();
-  if (/küchenzeile|küchenblock|küchenleerblock|einbauküche/.test(t)) return 'kitchen';
-  if (/l-sofa|ecksofa|eckcouch|wohnlandschaft/.test(t)) return 'sofaL';
-  if (/sofa|couch(?!tisch)/.test(t)) return 'sofa';
-  if (/couchtisch|beistelltisch|sofatisch/.test(t)) return 'coffee';
-  if (/tisch|schreibtisch/.test(t)) return 'table';
-  if (/bett/.test(t)) return 'bed';
-  if (/stuhl|sessel|hocker|bank/.test(t)) return 'chair';
-  if (/regal/.test(t)) return 'shelf';
-  if (/schrank|kommode|sideboard|highboard|lowboard|vitrine/.test(t)) return 'cabinet';
-  if (/teppich/.test(t)) return 'rug';
-  if (/lampe|leuchte/.test(t)) return 'lamp';
-  return 'box';
+  const chain = (t) => {
+    if (/küchenzeile|küchenblock|küchenleerblock|einbauküche/.test(t)) return 'kitchen';
+    if (/schreibtisch/.test(t) && /l-form|eckschreibtisch/.test(t)) return 'deskL';
+    if (/l-sofa|ecksofa|eckcouch|wohnlandschaft/.test(t)) return 'sofaL';
+    if (/sofa|couch(?!tisch)/.test(t)) return 'sofa';
+    if (/couchtisch|beistelltisch|sofatisch/.test(t)) return 'coffee';
+    if (/bürostuhl|drehstuhl/.test(t)) return 'chair';
+    if (/tisch/.test(t)) return 'table';
+    if (/bett/.test(t)) return 'bed';
+    if (/stuhl|stühle|sessel|hocker|bank/.test(t)) return 'chair';
+    if (/regal/.test(t)) return 'shelf';
+    if (/schrank|kommode|sideboard|highboard|lowboard|vitrine/.test(t)) return 'cabinet';
+    if (/teppich/.test(t)) return 'rug';
+    if (/lampe|leuchte/.test(t)) return 'lamp';
+    return 'box';
+  };
+  // Die Spalte "Form" entscheidet zuerst, sonst Kategorie und Name
+  const full = `${it.Form} ${it.Kategorie} ${it.Name}`.toLowerCase(), a = chain(String(it.Form || '').toLowerCase());
+  if (a === 'box') return chain(`${it.Kategorie} ${it.Name}`.toLowerCase()) === 'box' ? chain(full) : chain(`${it.Kategorie} ${it.Name}`.toLowerCase());
+  return a === 'table' && /couchtisch|beistelltisch|sofatisch/.test(full) ? 'coffee' : a;
 }
 function hexes(t) { return (String(t || '').match(/#[0-9a-f]{6}/gi) || []).map(h => new THREE.Color(h)); }
 // Farbe-Spalte: Varianten mit ";" getrennt, z. B. "creme #e6dccb, Füße #1e1e1e; anthrazit #4a4b4f"
@@ -821,7 +960,7 @@ function setColor(id, i) {
   for (const g2 of items) if (g2.base === f.base && g2.group) { buildItemMesh(g2); applyState(g2); }
   saveLayout(); checkCollisions();
 }
-const FALLBACK_COL = { kitchen: '#d9d6d0', sofaL: '#8d8f93', sofa: '#8d8f93', table: '#b08457', coffee: '#b08457', bed: '#e6e1d8', chair: '#9a7a5a', shelf: '#c9a27a', cabinet: '#c9a27a', rug: '#b9b2a6', lamp: '#f0ede6', box: '#b7b2aa' };
+const FALLBACK_COL = { deskL: '#f1f1ee', kitchen: '#d9d6d0', sofaL: '#8d8f93', sofa: '#8d8f93', table: '#b08457', coffee: '#b08457', bed: '#e6e1d8', chair: '#9a7a5a', shelf: '#c9a27a', cabinet: '#c9a27a', rug: '#b9b2a6', lamp: '#f0ede6', box: '#b7b2aa' };
 
 /* ---------- 3D-Bausteine (lokal: x = Breite, z = Tiefe, Vorderseite +z, Ursprung = Mitte Grundfläche) ---------- */
 const matCache = new Map();
@@ -831,11 +970,72 @@ function mat(color, rough = .75, extra = {}) {
   if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color: c, roughness: rough, ...extra }));
   return matCache.get(key);
 }
+// Graustufen-Muster, die mit der Möbelfarbe multipliziert werden: Cord, Steppung, Gewebe, Holzmaserung
+const grayTexCache = {};
+function grayTex(kind) {
+  if (grayTexCache[kind]) return grayTexCache[kind];
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  return grayTexCache[kind] = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+    if (kind === 'cord' || kind === 'quilt') {
+      const n = 8, rw = w / n; // 8 Rippen je Kachel
+      for (let i = 0; i < n; i++) {
+        const gr = g.createLinearGradient(i * rw, 0, (i + 1) * rw, 0);
+        gr.addColorStop(0, '#9a9a9a'); gr.addColorStop(.3, '#ffffff'); gr.addColorStop(.7, '#f1f1f1'); gr.addColorStop(1, '#8c8c8c');
+        g.fillStyle = gr; g.fillRect(i * rw, 0, rw, h);
+      }
+      if (kind === 'quilt') { // Steppnähte als Raster
+        const sh = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,.3)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); return gr; };
+        g.fillStyle = sh(0, 0, 0, 16); g.fillRect(0, 0, w, 16);
+        g.fillStyle = sh(0, h, 0, h - 16); g.fillRect(0, h - 16, w, 16);
+        g.fillStyle = sh(0, 0, 16, 0); g.fillRect(0, 0, 16, h);
+        g.fillStyle = sh(w, 0, w - 16, 0); g.fillRect(w - 16, 0, 16, h);
+      }
+    } else if (kind === 'wood' || kind === 'woodv') {
+      if (kind === 'woodv') { g.translate(w, 0); g.rotate(Math.PI / 2); }
+      for (let k = 0; k < 150; k++) {
+        g.globalAlpha = .04 + rnd() * .11; g.strokeStyle = rnd() > .35 ? '#000000' : '#ffffff'; g.lineWidth = .6 + rnd() * 2.2;
+        const y = rnd() * h, a = (rnd() - .5) * 14;
+        g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(w * .33, y + a, w * .66, y - a, w, y); g.stroke();
+      }
+      g.globalAlpha = 1; g.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    if (kind !== 'wood' && kind !== 'woodv') { // feines Gewebe-Rauschen
+      for (let k = 0; k < 5000; k++) { g.fillStyle = rnd() > .5 ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.07)'; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
+    }
+  });
+}
+// Material mit Muster; unit = Kantenlänge einer Muster-Kachel in cm
+function tmat(color, kind, unit, rough = .9) {
+  const c = color instanceof THREE.Color ? color : new THREE.Color(color);
+  const key = 't' + c.getHexString() + kind + unit + rough;
+  if (!matCache.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ color: c, map: grayTex(kind), roughness: rough });
+    m.userData.unit = unit; matCache.set(key, m);
+  }
+  return matCache.get(key);
+}
+// Holzmaserung nur bei holzfarbenen Tönen; Weiß, Grau und Schwarz bleiben glatt. vert = Maserung senkrecht
+function woodM(color, rough = .55, vert = false) {
+  const c = color instanceof THREE.Color ? color : new THREE.Color(color), h = {}; c.getHSL(h);
+  return h.s > .17 && h.l > .12 && h.l < .8 ? tmat(c, vert ? 'woodv' : 'wood', 110, rough) : mat(c, rough);
+}
+// Rundes Polster mit weicher Kante
+function cushion(g, w, d, y1, y2, m) {
+  const pts = [new THREE.Vector2(0, 0)], r = .12, n = 8;
+  for (let i = 0; i <= n; i++) { const a = -Math.PI / 2 + Math.PI / 2 * i / n; pts.push(new THREE.Vector2(.5 - r + Math.cos(a) * r, .35 + Math.sin(a) * .35)); }
+  for (let i = 0; i <= n; i++) { const a = Math.PI / 2 * i / n; pts.push(new THREE.Vector2(.5 - r + Math.cos(a) * r, .65 + Math.sin(a) * .35)); }
+  pts.push(new THREE.Vector2(0, 1));
+  const mesh = new THREE.Mesh(new THREE.LatheGeometry(pts, 40), m);
+  mesh.scale.set(w * S, (y2 - y1) * S, d * S); mesh.position.y = y1 * S;
+  mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
+}
 function rbox(g, x1, x2, y1, y2, z1, z2, m, r = 3) {
   const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1), d = Math.abs(z2 - z1);
   const rr = Math.min(r, w / 2 - .1, h / 2 - .1, d / 2 - .1);
   if (rr < .5) return box(g, x1, x2, y1, y2, z1, z2, m);
   const mesh = new THREE.Mesh(new RoundedBoxGeometry(w * S, h * S, d * S, 3, rr * S), m);
+  if (m.userData && m.userData.unit) uvFit(mesh, w, h, d, m.userData.unit);
   mesh.position.set((x1 + x2) / 2 * S, (y1 + y2) / 2 * S, (z1 + z2) / 2 * S);
   mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
 }
@@ -846,107 +1046,224 @@ function ellipse(g, w, d, y1, y2, m, seg = 48, flat = false) {
   mesh.scale.set(w * S, (y2 - y1) * S, d * S); mesh.position.y = (y1 + y2) / 2 * S;
   mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
 }
+// Rundstab von Punkt a nach Punkt b (cm), r1 = Radius bei a, r2 = Radius bei b
+function tube(g, a, b, r1, r2, m) {
+  const A = new THREE.Vector3(...a).multiplyScalar(S), Bv = new THREE.Vector3(...b).multiplyScalar(S), dir = Bv.clone().sub(A);
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2 * S, r1 * S, dir.length(), 14), m);
+  mesh.position.copy(A).addScaledVector(dir, .5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
+}
+// Platte mit geraden Seiten und runden Enden (Stadionform)
+function stadium(g, w, d, y1, y2, m) {
+  const r = d / 2 * S, a = Math.max(0, w / 2 * S - r), sh = new THREE.Shape();
+  sh.moveTo(-a, -r); sh.lineTo(a, -r); sh.absarc(a, 0, r, -Math.PI / 2, Math.PI / 2, false);
+  sh.lineTo(-a, r); sh.absarc(-a, 0, r, Math.PI / 2, Math.PI * 1.5, false);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: (y2 - y1) * S, bevelEnabled: false, curveSegments: 24 });
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, m); mesh.position.y = y1 * S;
+  mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
+}
+// Gebogene Schale (Stuhllehne): Ellipsenbogen von a0 bis a1 (Bogenmaß; 0 = rechts, 90° = hinten), Höhe je Winkel
+function shell(g, cz, rx, rz, th, a0, a1, yLo, yHi, m, seg = 36) {
+  const pos = [], nor = [], idx = [];
+  const lo = typeof yLo === 'function' ? yLo : () => yLo, hi = typeof yHi === 'function' ? yHi : () => yHi;
+  const v = (x, y, z, nx, ny, nz) => { pos.push(x * S, y * S, z * S); nor.push(nx, ny, nz); return pos.length / 3 - 1; };
+  const quad = (a, b, c, d) => idx.push(a, b, c, a, c, d);
+  const ring = [];
+  for (let i = 0; i <= seg; i++) {
+    const a = a0 + (a1 - a0) * i / seg, c = Math.cos(a), s = Math.sin(a);
+    const xo = c * rx, zo = cz - s * rz, xi = c * (rx - th), zi = cz - s * (rz - th), y0 = lo(a), y1 = hi(a);
+    let nx = c / rx, nz = -s / rz; const nl = Math.hypot(nx, nz); nx /= nl; nz /= nl;
+    ring.push({
+      ob: v(xo, y0, zo, nx, 0, nz), ot: v(xo, y1, zo, nx, 0, nz), ib: v(xi, y0, zi, -nx, 0, -nz), it: v(xi, y1, zi, -nx, 0, -nz),
+      to: v(xo, y1, zo, 0, 1, 0), ti: v(xi, y1, zi, 0, 1, 0), bo: v(xo, y0, zo, 0, -1, 0), bi: v(xi, y0, zi, 0, -1, 0),
+      P: [xo, zo, xi, zi, y0, y1], T: [-s, -c],
+    });
+  }
+  for (let i = 0; i < seg; i++) {
+    const p = ring[i], q = ring[i + 1];
+    quad(p.ob, q.ob, q.ot, p.ot); quad(q.ib, p.ib, p.it, q.it); quad(p.to, q.to, q.ti, p.ti); quad(q.bo, p.bo, p.bi, q.bi);
+  }
+  for (const [r, sgn] of [[ring[0], -1], [ring[seg], 1]]) { // Stirnflächen
+    const [xo, zo, xi, zi, y0, y1] = r.P, tl = Math.hypot(r.T[0] * rx, r.T[1] * rz), nx = sgn * r.T[0] * rx / tl, nz = sgn * r.T[1] * rz / tl;
+    const ob = v(xo, y0, zo, nx, 0, nz), ib = v(xi, y0, zi, nx, 0, nz), it = v(xi, y1, zi, nx, 0, nz), ot = v(xo, y1, zo, nx, 0, nz);
+    if (sgn < 0) quad(ib, ob, ot, it); else quad(ob, ib, it, ot);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, m); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh;
+}
+const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+const fnum = (t, re, i = 1) => num((t.match(re) || [])[i]);
 
 function buildSofaL(g, it, sz, cols, mirror) {
-  const t = it.Form.toLowerCase();
+  const t = it.Form.toLowerCase(), all = `${it.Form} ${it.Name} ${it.Farbe}`.toLowerCase();
   const W_ = sz.w, T = sz.d, H_ = sz.h;
-  const D = num((t.match(/tiefe\s*(\d+[.,]?\d*)/) || [])[1]) || Math.min(95, T * .6);
-  const rw = num((t.match(/recamiere\s*(\d+[.,]?\d*)/) || [])[1]) || 75;
-  const arm = num((t.match(/armlehnen?\s*(\d+[.,]?\d*)/) || [])[1]) || 18;
-  const armH = num((t.match(/(\d+)\s*hoch/) || [])[1]) || 57;
-  const seatH = num((t.match(/sitzh(ö|oe)he\s*(\d+)/) || [])[2]) || 42;
+  const D = fnum(t, /tiefe\s*(\d+[.,]?\d*)/) || Math.min(95, T * .6);
+  const rw = fnum(t, /recamiere\s*(\d+[.,]?\d*)/) || 75;
+  const arm = fnum(t, /armlehnen?\s*(\d+[.,]?\d*)/) || 18;
+  const armH = fnum(t, /(\d+)\s*hoch/) || 57;
+  const seatH = fnum(t, /sitzh(ö|oe)he\s*(\d+)/, 2) || 42;
+  const footH = fnum(t, /füße\s*(\d+)/) || 8, metalFeet = /füße[^|]*metall/.test(t);
+  const head = parseInt((t.match(/(\d+)\s*kopfstützen/) || [])[1] || '0');
+  const nBack = head || parseInt((t.match(/(\d+)\s*rückenkissen/) || [])[1] || '3');
+  const quilt = /gesteppt/.test(t), kind = /cord/.test(all) ? 'cord' : 'weave';
   let s = /links/.test(t) ? -1 : 1; if (mirror) s = -s;
-  const fab = mat(cols[0] || FALLBACK_COL.sofaL, 1), fab2 = mat((cols[0] || new THREE.Color(FALLBACK_COL.sofaL)).clone().multiplyScalar(.93), 1);
-  const foot = mat(cols[1] || '#1e1e1e', .5);
+  const base = cols[0] || new THREE.Color(FALLBACK_COL.sofaL);
+  const fab = tmat(base, kind, 16, 1), fab2 = tmat(base.clone().multiplyScalar(.9), kind, 16, 1), seatM = quilt ? tmat(base, 'quilt', 16, 1) : fab;
+  const foot = mat(cols[1] || '#1e1e1e', metalFeet ? .35 : .5, metalFeet ? { metalness: .6 } : {});
   const X = (a, b) => s > 0 ? [a, b] : [-b, -a];
   const B = (x1, x2, y1, y2, z1, z2, m, r) => { const [a, b] = X(x1, x2); return rbox(g, a, b, y1, y2, z1, z2, m, r); };
-  const z0 = -T / 2, zf = z0 + D, xr = W_ / 2 - rw;
-  for (const [fx, fz] of [[-W_ / 2 + 6, z0 + 6], [-W_ / 2 + 6, zf - 6], [W_ / 2 - 6, z0 + 6], [W_ / 2 - 6, T / 2 - 6], [xr + 6, T / 2 - 6], [0, z0 + 6]])
-    B(fx - 2.5, fx + 2.5, 0, 8, fz - 2.5, fz + 2.5, foot, 1);
-  B(-W_ / 2, W_ / 2, 8, seatH - 12, z0, zf, fab2, 2);           // Unterbau
-  B(xr, W_ / 2, 8, seatH - 12, zf - 5, T / 2, fab2, 2);           // Unterbau Recamiere
-  B(-W_ / 2, -W_ / 2 + arm, 8, armH, z0, zf, fab, 5);             // Armlehne
-  B(-W_ / 2 + arm, W_ / 2, 8, Math.min(H_ - 18, 62), z0, z0 + 18, fab2, 4); // Rückenteil
-  const seatEnd = W_ / 2 - rw, n = 2, sw = (seatEnd - (-W_ / 2 + arm)) / n;
-  for (let i = 0; i < n; i++) B(-W_ / 2 + arm + i * sw + .5, -W_ / 2 + arm + (i + 1) * sw - .5, seatH - 12, seatH, z0 + 18, zf, fab, 5);
-  B(xr + .5, W_ / 2, seatH - 12, seatH, z0 + 18, T / 2, fab, 5);     // Recamiere-Polster
-  const bw = (W_ - arm) / 3;
-  for (let i = 0; i < 3; i++) B(-W_ / 2 + arm + i * bw + 1, -W_ / 2 + arm + (i + 1) * bw - 1, seatH - 2, H_, z0 + 3, z0 + 24, fab, 7); // Rückenkissen
+  const z0 = -T / 2, zf = z0 + D, xr = W_ / 2 - rw, cs = seatH - 13;
+  for (const [fx, fz] of [[-W_ / 2 + 7, z0 + 7], [-W_ / 2 + 7, zf - 7], [W_ / 2 - 7, z0 + 7], [W_ / 2 - 7, T / 2 - 7], [xr + 7, T / 2 - 7], [0, z0 + 7], [0, zf - 7]]) {
+    if (metalFeet) tube(g, [s * fx, 0, fz], [s * fx, footH + 1, fz], 1.1, 1.6, foot);
+    else B(fx - 3, fx + 3, 0, footH + 1, fz - 3, fz + 3, foot, 1);
+  }
+  B(-W_ / 2 + 1, W_ / 2, footH, cs + 1, z0 + 1, zf - 1, fab2, 3);        // Unterbau
+  B(xr, W_ / 2, footH, cs + 1, zf - 8, T / 2 - 1, fab2, 3);              // Unterbau Recamiere
+  B(-W_ / 2, -W_ / 2 + arm, footH, armH, z0, zf, fab, Math.min(9, arm / 2.4)); // Armlehne
+  const backTop = head ? H_ - 15 : H_ - 8;
+  B(-W_ / 2 + arm - 2, W_ / 2, footH, backTop - 6, z0, z0 + 16, fab2, 6); // Rückenteil
+  const seatEnd = xr, x0 = -W_ / 2 + arm, n = Math.max(2, Math.round((seatEnd - x0) / 72)), sw = (seatEnd - x0) / n;
+  for (let i = 0; i < n; i++) B(x0 + i * sw + .4, x0 + (i + 1) * sw - .4, cs, seatH, z0 + 14, zf, seatM, 6);
+  B(xr + .4, W_ / 2, cs, seatH, z0 + 14, T / 2, seatM, 6);                // Recamiere-Polster
+  const bw = (W_ - arm) / nBack;
+  for (let i = 0; i < nBack; i++) {
+    const a = x0 + i * bw + .8, b = x0 + (i + 1) * bw - .8;
+    B(a, b, seatH - 3, backTop, z0 + 5, z0 + 27, fab, 9);                 // Rückenkissen
+    if (head) B(a + 3, b - 3, backTop - 4, H_, z0 + 3, z0 + 17, fab, 6);  // Kopfstütze
+  }
 }
 function buildSofa(g, it, sz, cols) {
-  const W_ = sz.w, T = sz.d, H_ = sz.h, fab = mat(cols[0] || FALLBACK_COL.sofa, 1), fab2 = mat((cols[0] || new THREE.Color(FALLBACK_COL.sofa)).clone().multiplyScalar(.93), 1);
+  const all = `${it.Form} ${it.Name} ${it.Farbe}`.toLowerCase(), kind = /cord/.test(all) ? 'cord' : 'weave';
+  const base = cols[0] || new THREE.Color(FALLBACK_COL.sofa);
+  const W_ = sz.w, T = sz.d, H_ = sz.h, fab = tmat(base, kind, 16, 1), fab2 = tmat(base.clone().multiplyScalar(.9), kind, 16, 1);
   const foot = mat(cols[1] || '#1e1e1e', .5), arm = 18, z0 = -T / 2;
   for (const fx of [-W_ / 2 + 6, W_ / 2 - 6]) for (const fz of [z0 + 6, T / 2 - 6]) rbox(g, fx - 2.5, fx + 2.5, 0, 8, fz - 2.5, fz + 2.5, foot, 1);
-  rbox(g, -W_ / 2, W_ / 2, 8, 30, z0, T / 2, fab2, 2);
-  rbox(g, -W_ / 2, -W_ / 2 + arm, 8, 58, z0, T / 2, fab, 5); rbox(g, W_ / 2 - arm, W_ / 2, 8, 58, z0, T / 2, fab, 5);
-  rbox(g, -W_ / 2 + arm, W_ / 2 - arm, 8, H_, z0, z0 + 20, fab2, 5);
+  rbox(g, -W_ / 2, W_ / 2, 8, 30, z0, T / 2, fab2, 3);
+  rbox(g, -W_ / 2, -W_ / 2 + arm, 8, 58, z0, T / 2, fab, 7); rbox(g, W_ / 2 - arm, W_ / 2, 8, 58, z0, T / 2, fab, 7);
+  rbox(g, -W_ / 2 + arm, W_ / 2 - arm, 8, H_ - 8, z0, z0 + 18, fab2, 6);
   const n = W_ > 170 ? 3 : 2, sw = (W_ - 2 * arm) / n;
-  for (let i = 0; i < n; i++) rbox(g, -W_ / 2 + arm + i * sw + .5, -W_ / 2 + arm + (i + 1) * sw - .5, 30, 43, z0 + 20, T / 2, fab, 5);
+  for (let i = 0; i < n; i++) {
+    rbox(g, -W_ / 2 + arm + i * sw + .5, -W_ / 2 + arm + (i + 1) * sw - .5, 30, 43, z0 + 16, T / 2, fab, 6);
+    rbox(g, -W_ / 2 + arm + i * sw + 1, -W_ / 2 + arm + (i + 1) * sw - 1, 40, H_, z0 + 5, z0 + 26, fab, 9);
+  }
 }
 function buildTable(g, it, sz, cols, coffee) {
   const t = `${it.Form} ${it.Name}`.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h;
-  const wood = mat(cols[0] || FALLBACK_COL.table, .6), legM = mat(cols[1] || cols[0] || FALLBACK_COL.table, .6);
-  const th = num((t.match(/platte\s*(\d+[.,]?\d*)/) || [])[1]) || (coffee ? 2.5 : 3);
-  const oval = /oval|rund/.test(t);
-  if (oval) ellipse(g, W_, /rund/.test(t) ? W_ : T, H_ - th, H_, wood);
-  else rbox(g, -W_ / 2, W_ / 2, H_ - th, H_, -T / 2, T / 2, wood, 1);
-  if (/säulenfu|saeulenfu|sockel/.test(t)) {
-    ellipse(g, W_ * .55, T * .55, 0, H_ - th, legM, 32, /gerillt|rillen/.test(t));
+  const wood = woodM(cols[0] || FALLBACK_COL.table), legM = woodM(cols[1] || cols[0] || FALLBACK_COL.table, .6, true);
+  const th = fnum(t, /platte\s*(\d+[.,]?\d*)/) || (coffee ? 2.5 : 3), top = H_ - th;
+  if (/stadion/.test(t)) stadium(g, W_, T, top, H_, wood);
+  else if (/oval|rund(?!e enden)/.test(t)) ellipse(g, W_, /rund/.test(t) && !/oval/.test(t) ? W_ : T, top, H_, wood);
+  else rbox(g, -W_ / 2, W_ / 2, top, H_, -T / 2, T / 2, wood, 1);
+  if (/halbsäule/.test(t)) { // eine schräge Wange + eine halbrunde Säule
+    const lean = .22, len = top / Math.cos(lean) + 1;
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(4 * S, len * S, T * .56 * S), legM);
+    slab.position.set((-W_ * .2 - Math.sin(lean) * top / 2 + 4) * S, top / 2 * S, 0); slab.rotation.z = -lean; slab.castShadow = slab.receiveShadow = true; g.add(slab);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, 1, 32, 1, false, 0, Math.PI), legM);
+    col.scale.set(22 * S, top * S, T * .5 * S); col.position.set(W_ * .2 * S, top / 2 * S, 0);
+    col.material = legM.clone(); col.material.side = THREE.DoubleSide; col.castShadow = col.receiveShadow = true; g.add(col);
+    box(g, W_ * .2 - .8, W_ * .2 + .8, 0, top, -T * .25, T * .25, legM);
+  } else if (/kreuzwange/.test(t)) { // zwei Füße aus je zwei gekreuzten Platten
+    for (const lx of [-W_ * .27, W_ * .27]) {
+      box(g, lx - 1.6, lx + 1.6, 0, top, -T * .3, T * .3, legM);
+      box(g, lx - 15, lx + 15, 0, top, -1.6, 1.6, legM);
+    }
+  } else if (/säulenfu|saeulenfu|sockel/.test(t)) {
+    ellipse(g, W_ * .55, T * .55, 0, top, legM, 32, /gerillt|rillen/.test(t));
   } else if (/v-wangen|v-f|v-bein/.test(t)) {
     for (const lx of [-W_ / 2 + W_ * .2, W_ / 2 - W_ * .2]) {
-      const top = H_ - th, half = T * .32, len = Math.hypot(half, top), ang = Math.atan2(half, top);
+      const half = T * .32, len = Math.hypot(half, top), ang = Math.atan2(half, top);
       for (const sgn of [-1, 1]) {
         const b = new THREE.Mesh(new THREE.BoxGeometry(2.2 * S, len * S, 10 * S), legM);
         b.position.set(lx * S, top / 2 * S, sgn * half / 2 * S); b.rotation.x = sgn * ang; b.castShadow = true; g.add(b);
       }
     }
+  } else if (/wangen/.test(t)) { // zwei Plattenfüße, von den Enden eingerückt
+    const ins = Math.min(34, W_ * .14), tw = Math.max(th, 4);
+    for (const sx of [-1, 1]) box(g, sx * (W_ / 2 - ins) - tw / 2, sx * (W_ / 2 - ins) + tw / 2, 0, top, -T / 2 + 7, T / 2 - 7, legM);
   } else {
     const ins = 6, lw = coffee ? 4 : 5;
     for (const lx of [-W_ / 2 + ins, W_ / 2 - ins - lw]) for (const lz of [-T / 2 + ins, T / 2 - ins - lw])
-      box(g, lx, lx + lw, 0, H_ - th, lz, lz + lw, legM);
+      box(g, lx, lx + lw, 0, top, lz, lz + lw, legM);
   }
 }
-function buildKitchen(g, it, sz, cols) {
+// Schreibtisch in L-Form: Hauptplatte hinten (volle Breite), Anbau seitlich nach vorn; man sitzt in der Innenecke
+function deskParts(it, sz, mirror) {
+  const t = it.Form.toLowerCase(), pd = Math.min(fnum(t, /tiefe\s*(\d+[.,]?\d*)/) || 60, sz.d, sz.w);
+  let s = /links/.test(t) ? -1 : 1; if (mirror) s = -s;
+  return { pd, s };
+}
+function buildDeskL(g, it, sz, cols, mirror) {
+  const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h, { pd, s } = deskParts(it, sz, mirror);
+  const topM = woodM(cols[0] || '#f1f1ee', .5), fr = mat(cols[1] || '#f4f4f4', .45, { metalness: .2 }), dark = mat('#1b1b1c', .5);
+  const th = fnum(t, /platte\s*(\d+[.,]?\d*)/) || 2.5, top = H_ - th, z0 = -T / 2;
+  const X = (a, b) => s > 0 ? [a, b] : [-b, -a];
+  const B = (x1, x2, y1, y2, z1, z2, m, r = 0) => { const [a, b] = X(x1, x2); return r ? rbox(g, a, b, y1, y2, z1, z2, m, r) : box(g, a, b, y1, y2, z1, z2, m); };
+  B(-W_ / 2, W_ / 2, top, H_, z0, z0 + pd, topM, 1);                 // Hauptplatte
+  B(W_ / 2 - pd, W_ / 2, top, H_, z0 + pd + .3, T / 2, topM, 1);     // Anbau
+  const cols3 = [[-W_ / 2 + 22, z0 + pd / 2, 'z'], [W_ / 2 - pd / 2, z0 + pd / 2, 'z'], [W_ / 2 - pd / 2, T / 2 - 18, 'x']];
+  for (const [cx, cz, dir] of cols3) {
+    if (dir === 'z') B(cx - 4, cx + 4, 0, 3, cz - pd / 2 + 4, cz + pd / 2 - 4, fr, 1); else B(cx - pd / 2 + 4, cx + pd / 2 - 4, 0, 3, cz - 4, cz + 4, fr, 1);
+    B(cx - 4.5, cx + 4.5, 3, top * .55, cz - 3, cz + 3, fr); B(cx - 3.6, cx + 3.6, top * .55, top - 4, cz - 2.3, cz + 2.3, fr);
+  }
+  B(-W_ / 2 + 14, W_ / 2 - 6, top - 4, top, z0 + pd / 2 - 9, z0 + pd / 2 + 9, fr);   // Träger unter der Hauptplatte
+  B(W_ / 2 - pd / 2 - 9, W_ / 2 - pd / 2 + 9, top - 4, top, z0 + pd / 2, T / 2 - 8, fr); // Träger unter dem Anbau
+  B(-W_ / 2 + 40, -W_ / 2 + 58, top - 2.5, top, z0 + pd - 1.5, z0 + pd + 1, dark);    // Bedienfeld
+}
+function buildKitchen(g0, it, sz, cols, mirror) {
   const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h;
-  const front = mat(cols[0] || FALLBACK_COL.kitchen, .55), top = mat(cols[1] || '#c19a6b', .5), acc = mat(cols[2] || '#222222', .4);
+  const g = new THREE.Group(); g0.add(g);
+  if (/hochschr[^|]*links/.test(t) !== !!mirror) g.scale.x = -1; // Hochschränke links statt rechts
+  const tower = /backofen/.test(t), hood = /dunstabzug/.test(t);
+  const front = mat(cols[0] || FALLBACK_COL.kitchen, .55), top = woodM(cols[1] || '#c19a6b', .5), acc = mat(cols[2] || '#222222', .4);
   const carcass = mat((cols[0] || new THREE.Color(FALLBACK_COL.kitchen)).clone().multiplyScalar(.85), .6), black = mat('#111111', .2, { metalness: .2 }), steel = mat('#c9ccce', .25, { metalness: .8 });
-  const bw = num((t.match(/unterschr\w*\s*(\d+[.,]?\d*)/) || [])[1]) || Math.min(W_, W_ - 60);
-  const bh = num((t.match(/(\d+[.,]?\d*)\s*hoch/) || [])[1]) || 87;
-  const tw = num((t.match(/hochschrank\s*(\d+[.,]?\d*)/) || [])[1]) || Math.max(0, W_ - bw);
+  const bw = fnum(t, /unterschr[^\d|]*(\d+[.,]?\d*)/) || Math.min(W_, W_ - 60);
+  const bh = fnum(t, /(\d+[.,]?\d*)\s*hoch/) || 87;
+  const tw = fnum(t, /hochschrank\s*(\d+[.,]?\d*)/) || Math.max(0, W_ - bw);
   const hm = t.match(/hängeschrank\s*(\d+[.,]?\d*)\s*[×x]\s*(\d+[.,]?\d*)\s*[×x]\s*(\d+[.,]?\d*)/);
   const x0 = -W_ / 2, z0 = -T / 2, zf = T / 2, plinth = 10, gap = .4;
   const fr = (x1, x2, y1, y2) => { box(g, x1 + gap, x2 - gap, y1 + gap, y2 - gap, zf - 2, zf, front); box(g, x1 + gap, x2 - gap, y2 - gap - 1.2, y2 - gap, zf, zf + .4, acc); };
+  const hob = (cx) => box(g, cx - 29, cx + 29, bh + 3.8, bh + 4.4, z0 + 6, zf - 8, black);
+  const sink = (cx, w) => {
+    box(g, cx - w / 2 + 5, cx + w / 2 - 5, bh + 3.8, bh + 4.3, z0 + 9, zf - 8, mat('#1a1a1a', .35));
+    box(g, cx - 1.4, cx + 1.4, bh + 4, bh + 30, z0 + 4, z0 + 7, steel); box(g, cx - 1.2, cx + 1.2, bh + 28, bh + 30.5, z0 + 4, z0 + 20, steel);
+  };
+  const drawers = (x1, x2) => { const n = 3, hh = (bh - plinth) / n; for (let k = 0; k < n; k++) fr(x1, x2, plinth + k * hh, plinth + (k + 1) * hh); };
   // Unterschränke
-  box(g, x0, x0 + bw, 0, plinth - .2, z0 + .5, zf - 6, top);
+  box(g, x0, x0 + bw, 0, plinth - .2, z0 + .5, zf - 6, acc);
   box(g, x0, x0 + bw, plinth, bh, z0, zf - 2, carcass);
   box(g, x0, x0 + bw, bh, bh + 3.8, z0, zf + 1, top);
-  const mods = bw >= 200 ? [bw - 146, 88, 58] : [bw];
-  let x = x0;
-  mods.forEach((mw, i) => {
-    if (mods.length === 3 && i === 1) { // Herd
-      fr(x, x + mw, bh - 14, bh);
-      box(g, x + (mw - 60) / 2, x + (mw + 60) / 2, plinth + 16, bh - 16, zf - 2, zf + .3, black);
-      box(g, x + (mw - 60) / 2 + 3, x + (mw + 60) / 2 - 3, plinth + 4, plinth + 14, zf - 2, zf, front);
-      box(g, x + (mw - 58) / 2, x + (mw + 58) / 2, bh + 3.8, bh + 4.4, z0 + 4, zf - 6, black);
-    } else if (mods.length === 3 && i === 2) { // Spüle
-      fr(x, x + mw, plinth, bh);
-      box(g, x + 4, x + mw - 4, bh + 3.8, bh + 4.2, z0 + 8, zf - 8, steel);
-      box(g, x + mw / 2 - 1.5, x + mw / 2 + 1.5, bh + 4, bh + 30, z0 + 4, z0 + 7, steel);
-    } else { // Schubladen
-      const n = 3, hh = (bh - plinth) / n;
-      for (let k = 0; k < n; k++) fr(x, x + mw, plinth + k * hh, plinth + (k + 1) * hh);
-    }
-    x += mw;
-  });
-  // Hochschrank
+  let hobX = null;
+  if (bw >= 200 && tower) {            // Spüle am freien Ende, Schubladen mit Kochfeld neben den Hochschränken
+    const dw = 80, sw = (bw - dw) / 2;
+    fr(x0, x0 + sw, plinth, bh); sink(x0 + sw / 2, sw);
+    fr(x0 + sw, x0 + 2 * sw, plinth, bh);
+    drawers(x0 + 2 * sw, x0 + bw); hobX = x0 + 2 * sw + dw / 2; hob(hobX);
+  } else if (bw >= 200) {              // Herd mit Backofen unter dem Kochfeld
+    const mods = [bw - 146, 88, 58]; let x = x0;
+    drawers(x, x + mods[0]); x += mods[0];
+    fr(x, x + 88, bh - 14, bh);
+    box(g, x + 14, x + 74, plinth + 16, bh - 16, zf - 2, zf + .3, black); box(g, x + 17, x + 71, plinth + 4, plinth + 14, zf - 2, zf, front);
+    hobX = x + 44; hob(hobX); x += 88;
+    fr(x, x + 58, plinth, bh); sink(x + 29, 58);
+  } else drawers(x0, x0 + bw);
+  // Hochschränke
   if (tw > 0) {
-    const xt = W_ / 2 - tw;
-    box(g, xt + .5, W_ / 2 - .5, 0, plinth - .2, z0 + .5, zf - 6, top);
+    const xt = W_ / 2 - tw, cw = tw / 2;
+    box(g, xt + .5, W_ / 2 - .5, 0, plinth - .2, z0 + .5, zf - 6, acc);
     box(g, xt, W_ / 2, plinth, H_, z0, zf - 2, carcass);
-    const cw = tw / 2;
-    for (let k = 0; k < 2; k++) { fr(xt + k * cw, xt + (k + 1) * cw, plinth, 130); fr(xt + k * cw, xt + (k + 1) * cw, 130, H_); }
+    if (tower) {
+      const o1 = 76, o2 = 136;      // Backofen auf Brusthöhe
+      fr(xt, xt + cw, plinth, o1); fr(xt, xt + cw, o2, H_);
+      box(g, xt + gap, xt + cw - gap, o1 + gap, o2 - gap, zf - 2, zf + .3, black);
+      box(g, xt + 7, xt + cw - 7, o1 + 8, o2 - 16, zf + .3, zf + .6, mat('#2b2f33', .1, { metalness: .4 }));
+      box(g, xt + 6, xt + cw - 6, o2 - 9, o2 - 7.5, zf + .6, zf + 3, steel);
+      fr(xt + cw, W_ / 2, plinth, o1); fr(xt + cw, W_ / 2, o1, H_);
+    } else for (let k = 0; k < 2; k++) { fr(xt + k * cw, xt + (k + 1) * cw, plinth, 130); fr(xt + k * cw, xt + (k + 1) * cw, 130, H_); }
   }
-  // Hängeschrank
+  // Hängeschränke am freien Ende
   if (hm) {
     const hw = num(hm[1]), hh = num(hm[2]), hd = num(hm[3]);
     box(g, x0, x0 + hw, H_ - hh, H_, z0, z0 + hd - 2, carcass);
@@ -956,34 +1273,133 @@ function buildKitchen(g, it, sz, cols) {
       box(g, a + gap, b - gap, H_ - hh + gap, H_ - hh + 1.6, z0 + hd, z0 + hd + .4, acc);
     }
   }
+  // Dunstabzug (schwarze Kopffreihaube mit Schacht) über dem Kochfeld
+  if (hood && hobX !== null) {
+    box(g, hobX - 11, hobX + 11, 172, H_ + 12, z0, z0 + 20, black);
+    const h = new THREE.Mesh(new THREE.BoxGeometry(60 * S, 34 * S, 5 * S), black);
+    h.position.set(hobX * S, 162 * S, (z0 + 15) * S); h.rotation.x = -.5; h.castShadow = true; g.add(h);
+    box(g, hobX - 30, hobX + 30, 172, 180, z0, z0 + 30, black);
+  }
+}
+function buildShellChair(g, it, sz, cols) {
+  const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h, deg = Math.PI / 180;
+  const c = cols[0] || FALLBACK_COL.chair, fab = mat(c, 1), cush = mat(new THREE.Color(c).multiplyScalar(.94), 1);
+  const sh = fnum(t, /sitzh(ö|oe)he\s*(\d+)/, 2) || 46;
+  const tub = /rundum/.test(t), arms = tub || /armlehne/.test(t), holz = /holzbein/.test(t), metal = /metall|rohrbein|kufen/.test(t);
+  const legM = mat(cols[1] || (metal ? '#1c1c1c' : '#5a4030'), metal ? .4 : .6, metal ? { metalness: .5 } : {});
+  const armH = fnum(t, /armh(ö|oe)he\s*(\d+)/, 2) || sh + 18, rx = W_ / 2, rz = T / 2;
+  const a0 = (tub ? -38 : arms ? -28 : 22) * deg, a1 = Math.PI - a0, th = tub ? 7 : arms ? 5.5 : 5;
+  const back = (a) => smooth((arms ? 84 - Math.abs(a / deg - 90) : 70 - Math.abs(a / deg - 90)) / (arms ? 80 : 42));
+  if (arms) shell(g, 0, rx, rz, th, a0, a1, sh - (tub ? 13 : 9), (a) => armH + (H_ - armH) * back(a), fab);
+  else shell(g, 0, rx, rz, th, a0, a1, (a) => sh - 3 + 9 * (1 - back(a)), (a) => H_ - 13 * (1 - back(a)), fab);
+  // Sitz
+  if (tub || /sitz rund/.test(t)) {
+    const sw = tub ? W_ - 2 * th + 2 : W_ * .84, sd = tub ? T - th + 2 : T * .82, zc = (T / 2 - sd / 2 - (tub ? 0 : 1)) * S;
+    if (tub) { ellipse(g, sw, sd, sh - 13, sh - 5, fab).position.z = zc; cushion(g, sw - 1, sd - 1, sh - 6, sh + 1.5, cush).position.z = zc; }
+    else cushion(g, sw, sd, sh - 7, sh, cush).position.z = zc;
+  } else rbox(g, -W_ / 2 + th, W_ / 2 - th, sh - 8, sh, -T / 2 + th - 1, T / 2 - 1, cush, 3.5);
+  // Gestell
+  const ly = sh - (tub ? 13 : 7);
+  if (/kufen/.test(t)) {
+    for (const sx of [-1, 1]) {
+      const x = sx * (W_ / 2 - 7);
+      tube(g, [x, 1.1, -T / 2 + 5], [x, 1.1, T / 2 - 5], 1.1, 1.1, legM);
+      tube(g, [x, 1.1, -T / 2 + 5], [x * .82, ly, -T / 2 + 11], 1.1, 1.1, legM);
+      tube(g, [x, 1.1, T / 2 - 5], [x * .82, ly, T / 2 - 9], 1.1, 1.1, legM);
+      tube(g, [x * .82, ly - 1, -T / 2 + 11], [x * .82, ly - 1, T / 2 - 9], 1.1, 1.1, legM);
+    }
+  } else {
+    const r1 = holz ? 1.3 : 1, r2 = holz ? 2.3 : 1;
+    for (const sx of [-1, 1]) for (const sz2 of [-1, 1])
+      tube(g, [sx * (W_ / 2 - 5), 0, sz2 * (T / 2 - 5) + (sz2 > 0 ? -1 : 2)], [sx * (W_ / 2 - 13), ly + 1, sz2 * (T / 2 - 13)], r1, r2, legM);
+  }
+}
+function buildOfficeChair(g, it, sz, cols) {
+  const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h;
+  const sh = fnum(t, /sitzh(ö|oe)he\s*(\d+)/, 2) || 50;
+  const c = cols[0] || '#2a2a2c', fab = mat(c, .95), frame = mat(cols[1] || '#1a1a1a', .45, { metalness: .3 }), steel = mat('#b9bcc0', .3, { metalness: .8 });
+  const r = Math.min(W_, T) / 2 - 4;
+  for (let k = 0; k < 5; k++) { // Fußkreuz mit Rollen
+    const a = k * Math.PI * 2 / 5 + Math.PI / 2, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    tube(g, [0, 9, 0], [x, 6.5, z], 2.2, 1.5, frame);
+    const w = new THREE.Mesh(new THREE.SphereGeometry(3 * S, 12, 8), mat('#111111', .6)); w.position.set(x * S, 3 * S, z * S); w.castShadow = true; g.add(w);
+  }
+  tube(g, [0, 8, 0], [0, sh - 12, 0], 2.6, 2.6, steel);
+  box(g, -12, 12, sh - 12, sh - 8, -12, 12, frame);
+  rbox(g, -25, 25, sh - 8, sh, -22, 26, fab, 4);                                 // Sitz
+  const bk = new THREE.Group(); bk.position.set(0, (sh + 2) * S, -24 * S); bk.rotation.x = -.14; g.add(bk);
+  const bh = H_ - sh - 24;
+  box(bk, -3, 3, -8, bh * .55, -3.5, -1, frame);                                 // Rückenträger
+  rbox(bk, -24, 24, 8, bh, -1, 2.5, fab, 1.6);                                   // Netzrücken
+  rbox(bk, -19, 19, 14, 30, 2, 5, frame, 2);                                     // Lordosenstütze
+  if (/kopfst/.test(t)) { box(bk, -2, 2, bh - 2, bh + 8, -3, -1.5, frame); rbox(bk, -15, 15, bh + 5, bh + 21, -1, 4, fab, 2.5); }
+  if (/armlehne/.test(t)) for (const sx of [-1, 1]) {
+    const x = sx * (W_ / 2 - 6);
+    box(g, x - 2, x + 2, sh - 6, sh + 19, -6, -1, frame); box(g, Math.min(x, sx * 22), Math.max(x, sx * 22), sh - 7, sh - 4, -6, -1, frame);
+    rbox(g, x - 4.5, x + 4.5, sh + 19, sh + 22, -16, 12, frame, 1.4);
+  }
+}
+function buildWardrobe(g, it, sz, cols) {
+  const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h;
+  const c0 = cols[0] || new THREE.Color('#c9a36f'), c1 = cols[1] || new THREE.Color('#1c1c1c');
+  const body = woodM(c0, .6, true), slat = woodM(c1, .55, true), backing = mat(c1.clone().multiplyScalar(.6), .7), rail = mat('#3a3a3c', .4, { metalness: .5 });
+  const n = parseInt((t.match(/(\d+)\s*türen/) || [])[1] || (W_ >= 180 ? 3 : 2)), pl = 6;
+  box(g, -W_ / 2, W_ / 2, 0, H_, -T / 2, T / 2 - 5, body);
+  box(g, -W_ / 2, W_ / 2, 0, pl, T / 2 - 5, T / 2 - 1, body); box(g, -W_ / 2, W_ / 2, H_ - 4, H_, T / 2 - 5, T / 2, body);
+  box(g, -W_ / 2, -W_ / 2 + 1.8, pl, H_ - 4, T / 2 - 5, T / 2, body); box(g, W_ / 2 - 1.8, W_ / 2, pl, H_ - 4, T / 2 - 5, T / 2, body);
+  box(g, -W_ / 2 + 1.8, W_ / 2 - 1.8, pl, pl + .8, T / 2 - 5, T / 2 - .5, rail);
+  const inner = W_ - 3.6, dw = inner / n + 2, lam = /lamellen/.test(t) ? n - 1 : -1;
+  for (let k = 0; k < n; k++) {
+    const x1 = -inner / 2 + k * (inner - dw) / Math.max(1, n - 1), zf = T / 2 - (k % 2 ? 1 : 2.8);
+    if (k === lam) {
+      box(g, x1, x1 + dw, pl + 1, H_ - 4.3, zf - 1.6, zf - 1, backing);
+      for (let x = x1 + .8; x + 2.4 <= x1 + dw; x += 4.2) box(g, x, x + 2.4, pl + 1, H_ - 4.3, zf - 1, zf + .6, slat);
+    } else {
+      box(g, x1, x1 + dw, pl + 1, H_ - 4.3, zf - 1.6, zf, body);
+      box(g, x1 + (k === 0 ? dw - 5 : 2), x1 + (k === 0 ? dw - 2 : 5), H_ * .35, H_ * .62, zf, zf + .5, rail); // Griffleiste
+    }
+  }
+}
+function buildLowboard(g, it, sz, cols) {
+  const t = it.Form.toLowerCase(), W_ = sz.w, T = sz.d, H_ = sz.h;
+  const m = mat(cols[0] || '#3e4044', .65), oak = woodM(cols[1] || '#a77d50', .55), dark = mat('#17181a', .9);
+  const no = parseInt((t.match(/(\d+)\s*offene/) || [])[1] || '3'), nf = parseInt((t.match(/(\d+)\s*(klappen|fronten|schubladen|türen)/) || [])[1] || '3');
+  const floorWange = /wangen/.test(t), y0 = floorWange ? 12 : 6, topT = 2.6, sideT = 3, mid = y0 + (H_ - topT - y0) * .52;
+  box(g, -W_ / 2, W_ / 2, H_ - topT, H_, -T / 2, T / 2, oak);                           // Deckplatte
+  for (const sx of [-1, 1]) box(g, sx > 0 ? W_ / 2 - sideT : -W_ / 2, sx > 0 ? W_ / 2 : -W_ / 2 + sideT, floorWange ? 0 : y0, H_ - topT, -T / 2 + .5, T / 2 - .5, m);
+  if (!floorWange) box(g, -W_ / 2 + 3, W_ / 2 - 3, 0, y0, -T / 2 + 4, T / 2 - 5, dark);
+  const xa = -W_ / 2 + sideT, xb = W_ / 2 - sideT;
+  box(g, xa, xb, y0, mid, -T / 2 + .5, T / 2 - 2, m);                                    // unterer Korpus
+  for (let k = 0; k < nf; k++) {
+    const a = xa + k * (xb - xa) / nf, b = a + (xb - xa) / nf;
+    box(g, a + .3, b - .3, y0 + .3, mid - .3, T / 2 - 2, T / 2 - .5, m);
+    box(g, a + .3, b - .3, mid - 1.6, mid - .3, T / 2 - .5, T / 2 - .2, dark);            // Griffmulde
+  }
+  box(g, xa, xb, mid, mid + 1.4, -T / 2 + .5, T / 2 - .8, oak);                          // Boden der offenen Fächer
+  box(g, xa, xb, mid, H_ - topT, -T / 2 + .5, -T / 2 + 2, oak);                          // Rückwand
+  for (let k = 1; k < no; k++) { const x = xa + k * (xb - xa) / no; box(g, x - 1.2, x + 1.2, mid + 1.4, H_ - topT, -T / 2 + 2, T / 2 - 1.5, m); }
 }
 function buildGeneric(g, type, it, sz, cols) {
   const W_ = sz.w, T = sz.d, H_ = sz.h, c = cols[0] || FALLBACK_COL[type] || FALLBACK_COL.box, m = mat(c, .7);
+  const t = `${it.Form}`.toLowerCase(), full = `${it.Form} ${it.Kategorie} ${it.Name}`.toLowerCase();
   if (type === 'bed') {
     const frame = mat(cols[1] || c, .7);
     rbox(g, -W_ / 2, W_ / 2, 0, 30, -T / 2, T / 2, frame, 2);
     rbox(g, -W_ / 2 + 3, W_ / 2 - 3, 30, 52, -T / 2 + 3, T / 2 - 3, mat('#f4f2ee', 1), 6);
     rbox(g, -W_ / 2, W_ / 2, 0, H_, -T / 2, -T / 2 + 8, frame, 3);
     for (const sx of [-1, 1]) rbox(g, sx * W_ / 4 - W_ / 5.5, sx * W_ / 4 + W_ / 5.5, 52, 64, -T / 2 + 12, -T / 2 + 45, mat('#ffffff', 1), 6);
+  } else if (type === 'chair' && /bürostuhl|buerostuhl|drehstuhl/.test(full)) {
+    buildOfficeChair(g, it, sz, cols);
+  } else if (type === 'chair' && /schale/.test(t)) {
+    buildShellChair(g, it, sz, cols);
   } else if (type === 'chair') {
-    const t = `${it.Form}`.toLowerCase();
-    const sh = num((t.match(/sitzh(ö|oe)he\s*(\d+)/) || [])[2]) || 46;
+    const sh = fnum(t, /sitzh(ö|oe)he\s*(\d+)/, 2) || 46;
     const fab = mat(c, 1), metal = /metall/.test(t), fr = mat(cols[1] || (metal ? '#1c1c1c' : c), metal ? .4 : .6, metal ? { metalness: .5 } : {});
     const lw = metal ? 2 : 3.5;
     for (const lx of [-W_ / 2 + 5, W_ / 2 - 5 - lw]) for (const lz of [-T / 2 + 5, T / 2 - 5 - lw]) box(g, lx, lx + lw, 0, sh - 7, lz, lz + lw, fr);
     rbox(g, -W_ / 2 + 3, W_ / 2 - 3, sh - 8, sh, -T / 2 + 6, T / 2 - 1, fab, 4);
-    // Rückenlehne, bei "rund" leicht gebogen
-    const bz = -T / 2 + 2, bt = 6, top = H_, bot = sh - 2;
-    if (/rund|geschwungen/.test(t)) {
-      const cw = W_ * .46, ww = W_ * .3;
-      rbox(g, -cw / 2, cw / 2, bot, top, bz, bz + bt, fab, 3);
-      for (const sx of [-1, 1]) {
-        const wing = new THREE.Mesh(new RoundedBoxGeometry(ww * S, (top - bot - (/hoch/.test(t) ? 0 : 6)) * S, bt * S, 3, 3 * S), fab);
-        const ang = .45;
-        wing.position.set(sx * (cw / 2 + Math.cos(ang) * ww / 2 - 1) * S, (bot + top - (/hoch/.test(t) ? 0 : 6)) / 2 * S, (bz + bt / 2 + Math.sin(ang) * ww / 2) * S);
-        wing.rotation.y = -sx * ang; wing.castShadow = true; g.add(wing);
-      }
-    } else rbox(g, -W_ / 2 + 3, W_ / 2 - 3, bot, top, bz, bz + bt, fab, 3);
+    if (/rund|geschwungen/.test(t)) shell(g, 0, W_ / 2, T / 2, 5, 25 * Math.PI / 180, 155 * Math.PI / 180, sh - 2, H_, fab);
+    else rbox(g, -W_ / 2 + 3, W_ / 2 - 3, sh - 2, H_, -T / 2 + 2, -T / 2 + 8, fab, 3);
     if (/armlehne/.test(t)) for (const sx of [-1, 1]) rbox(g, sx > 0 ? W_ / 2 - 6 : -W_ / 2, sx > 0 ? W_ / 2 : -W_ / 2 + 6, sh, sh + 17, -T / 2 + 6, T / 2 - 10, fab, 2.5);
   } else if (type === 'shelf') {
     const th = 2;
@@ -991,23 +1407,10 @@ function buildGeneric(g, type, it, sz, cols) {
     box(g, -W_ / 2, W_ / 2, 0, H_, -T / 2, -T / 2 + 1, m);
     const n = Math.max(2, Math.round(H_ / 38));
     for (let k = 0; k <= n; k++) box(g, -W_ / 2, W_ / 2, k * (H_ - th) / n, k * (H_ - th) / n + th, -T / 2, T / 2, m);
-  } else if (type === 'cabinet' && /schublade|fächer|faecher/.test(it.Form.toLowerCase())) {
-    const t = it.Form.toLowerCase(), acc = mat(cols[1] || '#a77d50', .6), hole = mat('#1d1e20', .9);
-    const nd = parseInt((t.match(/(\d+)\s*schublade/) || [])[1] || '0'), no = parseInt((t.match(/(\d+)\s*offene/) || [])[1] || '0');
-    const pl = 6, top = 2.5;
-    box(g, -W_ / 2 + 2, W_ / 2 - 2, 0, pl, -T / 2 + 3, T / 2 - 5, mat('#1d1e20', .6));
-    box(g, -W_ / 2 + .2, W_ / 2 - .2, pl, H_ - top, -T / 2 + .2, T / 2 - 1, m);
-    box(g, -W_ / 2, W_ / 2, H_ - top, H_, -T / 2, T / 2, acc);
-    const rows = [nd ? { n: nd, kind: 'd' } : null, no ? { n: no, kind: 'o' } : null].filter(Boolean);
-    const rh = (H_ - pl - top) / Math.max(1, rows.length);
-    rows.forEach((r, ri) => {
-      const y1 = pl + ri * rh, cw = (W_ - 3) / r.n;
-      for (let k = 0; k < r.n; k++) {
-        const x1 = -W_ / 2 + 1.5 + k * cw, x2 = x1 + cw;
-        if (r.kind === 'd') { box(g, x1 + .3, x2 - .3, y1 + .3, y1 + rh - .3, T / 2 - 1, T / 2, acc); box(g, (x1 + x2) / 2 - 7, (x1 + x2) / 2 + 7, y1 + rh - 4, y1 + rh - 3, T / 2, T / 2 + .8, mat('#1c1c1c', .4)); }
-        else box(g, x1 + 1, x2 - 1, y1 + 1, y1 + rh - 1, T / 2 - 1.2, T / 2 - .9, hole);
-      }
-    });
+  } else if (type === 'cabinet' && /schiebet/.test(full)) {
+    buildWardrobe(g, it, sz, cols);
+  } else if (type === 'cabinet' && /offene|schublade|fächer|faecher/.test(t)) {
+    buildLowboard(g, it, sz, cols);
   } else if (type === 'cabinet') {
     box(g, -W_ / 2, W_ / 2, 6, H_, -T / 2, T / 2 - 1.5, m);
     box(g, -W_ / 2 + 1, W_ / 2 - 1, 0, 6, -T / 2 + 2, T / 2 - 4, mat('#2a2a2a', .6));
@@ -1053,6 +1456,11 @@ function localRects(f) {
     const rx = s > 0 ? [W_ / 2 - rw, W_ / 2] : [-W_ / 2, -W_ / 2 + rw];
     return [{ x1: -W_ / 2, x2: W_ / 2, z1: -T / 2, z2: -T / 2 + D }, { x1: rx[0], x2: rx[1], z1: -T / 2 + D, z2: T / 2 }];
   }
+  if (f.type === 'deskL') {
+    const { pd, s } = deskParts(f.it, f.size, layout[f.id].mirror);
+    const rx = s > 0 ? [W_ / 2 - pd, W_ / 2] : [-W_ / 2, -W_ / 2 + pd];
+    return [{ x1: -W_ / 2, x2: W_ / 2, z1: -T / 2, z2: -T / 2 + pd }, { x1: rx[0], x2: rx[1], z1: -T / 2 + pd, z2: T / 2 }];
+  }
   return [{ x1: -W_ / 2, x2: W_ / 2, z1: -T / 2, z2: T / 2 }];
 }
 function rectsOf(f) {
@@ -1068,7 +1476,8 @@ function buildItemMesh(f) {
   if (f.group) { furnRoot.remove(f.group); f.group.traverse(o => o.geometry && o.geometry.dispose()); }
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const st = layout[f.id], cols = colsOf(f);
-  if (f.type === 'kitchen') buildKitchen(body, f.it, f.size, cols);
+  if (f.type === 'kitchen') buildKitchen(body, f.it, f.size, cols, st.mirror);
+  else if (f.type === 'deskL') buildDeskL(body, f.it, f.size, cols, st.mirror);
   else if (f.type === 'sofaL') buildSofaL(body, f.it, f.size, cols, st.mirror);
   else if (f.type === 'sofa') buildSofa(body, f.it, f.size, cols);
   else if (f.type === 'table' || f.type === 'coffee') buildTable(body, f.it, f.size, cols, f.type === 'coffee');
@@ -1110,7 +1519,8 @@ function checkCollisions() {
     f.foot.material.color.set(bad ? 0xd93025 : 0xb5743a);
     f.foot.material.opacity = bad ? .35 : .22;
   }
-  renderMenu(); renderInspector();
+  if (!drag) renderMenu();
+  renderInspector();
 }
 function snap(f) {
   const st = layout[f.id], rr = roomRect(f); if (!rr) return;
@@ -1141,30 +1551,42 @@ const furnEl = document.getElementById('furn'), sumEl = document.getElementById(
 const fmtSize = (s) => `${String(s.w).replace('.', ',')} × ${String(s.d).replace('.', ',')} × ${String(s.h).replace('.', ',')} cm`;
 const priceNum = (p) => { const v = parseFloat(String(p).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')); return isNaN(v) ? 0 : v; };
 const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const setN = (it) => Math.max(1, parseInt((String(it.Form).match(/set\s*(\d+)/i) || [])[1] || '1')); // "Preis für Set 4" = Preis gilt für 4 Stück
+const imgUrl = (u) => { u = String(u || '').trim().replace(/ /g, '%20'); return /^\/\//.test(u) ? 'https:' + u : /^https?:\/\//.test(u) ? u : ''; };
+let menuHtml = null;
 function renderMenu() {
   let html = '', sum = 0, cnt = 0;
   for (const r of ROOMS) {
     const list = items.filter(f => f.room === r.tab && f.k === 0);
     if (!list.length) continue;
-    html += `<div class="rgrp"><div class="rh">${esc(r.tab)} <span>${list.length}${r.rect ? '' : ' · Raum folgt'}</span></div>`;
+    const shown = r.rect ? items.filter(f => f.room === r.tab && layout[f.id].on).length : 0;
+    html += `<div class="rgrp ${openRooms && !openRooms.has(r.tab) ? 'closed' : ''}"><div class="rh" data-room="${esc(r.tab)}"><span class="t">${esc(r.tab)}</span><span>${r.rect ? `${shown} von ${list.length} an` : `${list.length} · Raum folgt`}</span></div>`;
     for (const f of list) {
       const inst = items.filter(i => i.base === f.base);
       const onN = r.rect ? inst.filter(i => layout[i.id].on).length : 0, on = onN > 0;
-      sum += priceNum(f.it.Preis) * onN; cnt += onN;
+      sum += priceNum(f.it.Preis) / setN(f.it) * onN; cnt += onN;
       const anyBad = inst.some(i => i.bad && layout[i.id].on);
       const meta = [f.sizeMissing ? '<span class="warn">Maße fehlen</span>' : fmtSize(f.size), f.it.Preis, f.it.Status ? `<span class="chip ${esc(f.it.Status)}">${esc(f.it.Status)}</span>` : '', anyBad ? '<span class="warn">passt so nicht</span>' : ''].filter(Boolean).join(' · ');
       const cntHtml = r.rect ? `<div class="cnt">Anzahl <button data-cnt="-1" data-fid="${esc(f.base)}" title="weniger">−</button><b>${inst.length}</b><button data-cnt="1" data-fid="${esc(f.base)}" title="mehr">+</button></div>` : '';
       html += `<div class="item ${selected && selected.base === f.base ? 'sel' : ''} ${r.rect ? '' : 'dis'}" data-id="${esc(f.id)}">
         <input type="checkbox" ${on ? 'checked' : ''} ${r.rect ? '' : 'disabled'} data-tog="${esc(f.id)}">
-        <div><div class="nm">${esc(f.it.Name || f.it.Kategorie)}</div><div class="mt">${meta}</div>${cntHtml}${r.rect ? swatches(f) : ''}</div>
+        ${imgUrl(f.it.Bild) ? `<img class="th" src="${esc(imgUrl(f.it.Bild))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}
+        <div style="min-width:0"><div class="nm">${esc(f.it.Name || f.it.Kategorie)}</div><div class="mt">${meta}</div>${cntHtml}${r.rect ? swatches(f) : ''}</div>
         ${f.it.Link ? `<a href="${esc(f.it.Link)}" target="_blank" rel="noopener" title="Zum Produkt">↗</a>` : ''}</div>`;
     }
     html += '</div>';
   }
-  furnEl.innerHTML = html || '<div class="note">Keine Möbel in der Tabelle.</div>';
+  html = html || '<div class="note">Keine Möbel in der Tabelle.</div>';
+  if (html !== menuHtml) { furnEl.innerHTML = html; menuHtml = html; }
   sumEl.textContent = cnt ? `Eingeblendet: ${cnt} Möbel · ${sum.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}` : '';
 }
 furnEl.addEventListener('click', (e) => {
+  const rh = e.target.closest('.rh');
+  if (rh) { // Raum ein-/ausklappen
+    if (!openRooms) openRooms = new Set(ROOMS.map(r => r.tab));
+    const room = rh.dataset.room; openRooms.has(room) ? openRooms.delete(room) : openRooms.add(room);
+    renderMenu(); return;
+  }
   if (e.target.dataset?.col) { setColor(e.target.dataset.fid, +e.target.dataset.col); return; }
   if (e.target.dataset?.cnt) { setCount(e.target.dataset.fid, +e.target.dataset.cnt); return; }
   const tog = e.target.dataset?.tog;
@@ -1185,6 +1607,7 @@ furnEl.addEventListener('click', (e) => {
 const inspEl = document.getElementById('insp');
 function renderInspector() {
   const f = selected;
+  inspEl.classList.toggle('drag', !!drag);
   if (!f || !layout[f.id].on) { inspEl.style.display = 'none'; return; }
   const st = layout[f.id], a = footprint(st, f.size), rr = roomRect(f);
   const d = rr ? { o: Math.round(a.z1 - rr.z1), u: Math.round(rr.z2 - a.z2), l: Math.round(a.x1 - rr.x1), r: Math.round(rr.x2 - a.x2) } : null;
@@ -1192,10 +1615,10 @@ function renderInspector() {
   inspEl.innerHTML = `<button class="x" data-a="close" title="Schließen">×</button><b>${esc(f.it.Name)}${items.filter(i => i.base === f.base).length > 1 ? ` (${f.k + 1}/${items.filter(i => i.base === f.base).length})` : ''}</b>
     <div class="row">${f.sizeMissing ? 'Maße fehlen in der Tabelle (Platzhalter)' : fmtSize(f.size)}${f.it.Preis ? ' · ' + esc(f.it.Preis) : ''}</div>
     ${d ? `<div class="row">Abstand zur Wand (Draufsicht): oben ${d.o}, unten ${d.u}, links ${d.l}, rechts ${d.r} cm</div>` : ''}
-    ${f.bad ? '<div class="row warn">Überschneidet sich mit Wand, Heizkörper, Kamin oder einem anderen Möbel.</div>' : ''}
+    ${f.bad ? '<div class="row warn">Passt so nicht: überschneidet sich mit Wand, Heizkörper, Kamin oder einem anderen Möbel.</div>' : ''}
     ${swatches(f, true)}
     <div class="btns"><button data-a="rot">↻ 90°</button><button data-a="rot15">↻ 15°</button>
-    ${f.type === 'sofaL' ? '<button data-a="mirror">Ecke wechseln</button>' : ''}
+    ${f.type === 'sofaL' ? '<button data-a="mirror">Ecke wechseln</button>' : f.type === 'kitchen' || f.type === 'deskL' ? '<button data-a="mirror">Spiegeln</button>' : ''}
     <button data-a="hide">Ausblenden</button>${f.it.Link ? `<button data-a="link">Produkt ↗</button>` : ''}</div>`;
 }
 function act(a) {
@@ -1232,7 +1655,9 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   const f = items.find(i => i.id === hits[0].object.userData.itemId), p = floorHit();
   if (!f || !p) return;
   controls.enabled = false;
-  selected = f; drag = { f, dx: layout[f.id].x - p.x, dz: layout[f.id].z - p.z, moved: false };
+  selected = f; if (openRooms) openRooms.add(f.room);
+  renderMenu();
+  drag = { f, dx: layout[f.id].x - p.x, dz: layout[f.id].z - p.z, moved: false };
   renderer.domElement.setPointerCapture(e.pointerId);
   checkCollisions();
 }, { capture: true });
@@ -1242,8 +1667,9 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   const st = layout[drag.f.id]; st.x = p.x + drag.dx; st.z = p.z + drag.dz; drag.moved = true;
   snap(drag.f); applyState(drag.f); checkCollisions();
 });
+renderer.domElement.addEventListener('pointercancel', () => { if (drag) { drag = null; controls.enabled = true; saveLayout(); checkCollisions(); } });
 renderer.domElement.addEventListener('pointerup', (e) => {
-  if (drag) { drag = null; controls.enabled = true; saveLayout(); return; }
+  if (drag) { drag = null; controls.enabled = true; saveLayout(); checkCollisions(); return; }
   if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 4 && selected) { selected = null; checkCollisions(); }
   downAt = null;
 });
@@ -1367,7 +1793,7 @@ function tick(now) {
 requestAnimationFrame(tick);
 window.__setView = setView; // für Tests
 window.__cam = (px, py, pz, tx, ty, tz) => { anim = null; persp.position.set(px, py, pz); controls.target.set(tx, ty, tz); controls.update(); };
-window.__dbg = () => ({ items, layout, snap, applyState, rectsOf });
+window.__dbg = () => ({ items, layout, snap, applyState, rectsOf, screen: (f) => { const v = new THREE.Vector3(layout[f.id].x * S, .3, layout[f.id].z * S).project(cam), r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; } });
 </script>
 </body>
 </html>
